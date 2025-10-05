@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exoplanet Explorer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="stars"></div>
+  <div class="container">
+    <h1>Exoplanet Explorer</h1>
+
+    <section class="intro">
+      <h2>Project Introduction</h2>
+      <p>[Write the introduction of your project here. Explain the goals, motivation, and context.]</p>
+    </section>
+
+    <section class="manual">
+      <h2>User Manual</h2>
+      </section>
+      
+
+    <div class="buttons">
+     <button onclick="location.href='Simulador2D.html'">Abrir Modelo 2D</button>
+
+
+      <button onclick="location.href='Simulador3D.html'">Go to 3D Simulation 🌌</button>
+    </div>
+  </div>
+  
+<!-- Virtual Assistant Floating Chat -->
+<div class="chat-widget" id="chatWidget">
+  <div class="chat-header" onclick="toggleChat()">
+    Virtual Assistant 🤖
+    <span id="chatToggleIcon">▼</span>
+  </div>
+  <div class="chat-body" id="chatBody">
+    <div class="chat-messages" id="chatMessages">
+      <div class="bot-message">Hello 👋, I'm your assistant. Ask me anything about the project 🚀</div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="userInput" placeholder="Type a message...">
+      <button onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+</div>
+
+
+  <script>
+  async function sendMessage() {
+    const input = document.getElementById('userInput');
+    const messages = document.getElementById('chatMessages');
+    const userText = input.value.trim();
+    if (userText === '') return;
+
+    // User message
+    const userMsg = document.createElement('div');
+    userMsg.className = 'user-message';
+    userMsg.textContent = userText;
+    messages.appendChild(userMsg);
+
+    input.value = '';
+    messages.scrollTop = messages.scrollHeight;
+
+    // Send to Flask backend
+    try {
+      const resp = await fetch("http://127.0.0.1:5000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userText })
+      });
+
+      const data = await resp.json();
+
+      // Bot response
+      const botMsg = document.createElement('div');
+      botMsg.className = 'bot-message';
+      botMsg.textContent = data.response;   
+      messages.appendChild(botMsg);
+      messages.scrollTop = messages.scrollHeight;
+    } catch (error) {
+      const botMsg = document.createElement('div');
+      botMsg.className = 'bot-message';
+      botMsg.textContent = "Error connecting to the server 🛰️";
+      messages.appendChild(botMsg);
+    }
+  }
+  </script>
+
+  <script>
+    function toggleChat() {
+    const chatBody = document.getElementById('chatBody');
+    const icon = document.getElementById('chatToggleIcon');
+    if (chatBody.style.display === 'flex') {
+      chatBody.style.display = 'none';
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      chatBody.style.display = 'flex';
+      icon.style.transform = 'rotate(180deg)';
+    }
+  }
+
+  
+    const inputField = document.getElementById('userInput');
+    inputField.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") {
+            sendMessage();
+            event.preventDefault(); // evita que haga un salto de línea
+        }
+    });
+
+  </script>
+  <script>
+    function abrirModelo() {
+        fetch("/abrir-modelo", { method: "POST" })
+            .then(res => res.json())
+            .then(data => alert(data.status));
+      }
+
+      function predictML() {
+          const features = [5.5, 1.2, 0.3, 400, 365]; // ejemplo de tus variables
+          fetch("/predict", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({features})
+          })
+          .then(res => res.json())
+          .then(data => alert("Predicción: " + data.prediction));
+      }
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exoplanets 2D Simulation</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+</head>
+<body>
+  <h1>Exoplanets 2D</h1>
+  <div>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    let planetas = [];
+
+    function setup() {
+      createCanvas(800, 600).parent('canvas');
+      background(0);
+
+      // Traer exoplanetas del backend
+      fetch("http://127.0.0.1:5001/exoplanets")
+        .then(res => res.json())
+        .then(data => {
+          planetas = data.map(p => ({
+            x: (p.ra - Math.min(...data.map(d => d.ra))) / 
+               (Math.max(...data.map(d => d.ra)) - Math.min(...data.map(d => d.ra))) * width,
+            y: height - ((p.dec - Math.min(...data.map(d => d.dec))) / 
+                        (Math.max(...data.map(d => d.dec)) - Math.min(...data.map(d => d.dec))) * height),
+            size: Math.max(2, p.pl_rade),
+            name: p.hostname
+          }));
+        });
+    }
+
+    function draw() {
+      background(0);
+      fill(255);
+      planetas.forEach(p => ellipse(p.x, p.y, p.size*3));
+    }
+
+    function mouseMoved() {
+      planetas.forEach(p => {
+        if (dist(mouseX, mouseY, p.x, p.y) < p.size*2) {
+          fill(255);
+          text(p.name, mouseX + 10, mouseY);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
+
