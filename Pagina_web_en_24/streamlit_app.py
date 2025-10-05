@@ -68,8 +68,8 @@ with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
         if not reply:
             reply = generate_fallback_reply(user_input)
 
-    st.session_state.assistant_messages.append(("bot", reply))
-    # No forzamos rerun; Streamlit mostrará los nuevos mensajes en la próxima interacción
+        st.session_state.assistant_messages.append(("bot", reply))
+        # No forzamos rerun; Streamlit mostrará los nuevos mensajes en la próxima interacción
 
 if page == "Simulador 2D":
     st.header("Simulador 2D")
