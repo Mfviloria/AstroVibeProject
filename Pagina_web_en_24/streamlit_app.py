@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
+import requests
 import numpy as np
 import plotly.express as px
 
@@ -10,7 +11,56 @@ st.set_page_config(page_title="Simulador y Clasificador de Exoplanetas", layout=
 st.title("Simulador y Clasificador de Exoplanetas")
 
 st.sidebar.header("Navegación")
-page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Clasificador ML"])
+# Páginas disponibles
+page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simulador 3D", "Clasificador ML"])
+
+# --- Asistente virtual para usuarios noveles (barra lateral) ---
+if 'assistant_messages' not in st.session_state:
+    st.session_state.assistant_messages = [
+        ("bot", "Hola 👋, soy el asistente. Puedo ayudarte a usar el simulador 2D/3D y el clasificador. Pregunta cosas como: '¿Cómo cargo datos?' o '¿Cómo agrego un exoplaneta?'.")
+    ]
+
+def generate_fallback_reply(user_text: str) -> str:
+    t = user_text.lower()
+    if '3d' in t or '3 d' in t:
+        return "Para usar el simulador 3D: ve a 'Simulador 3D' desde el menú y usa los controles para ajustar la escala y colores. Si no ves puntos, comprueba que el CSV 'ML/exoplanets_visual.csv' existe."
+    if '2d' in t:
+        return "En 'Simulador 2D' puedes ver la distribución en RA/Dec. Usa el formulario para agregar un exoplaneta y el botón de predicción si tienes los modelos en la carpeta ML/."
+    if 'csv' in t or 'datos' in t:
+        return "El archivo de datos esperado está en 'Pagina_web_en_24/ML/exoplanets_visual.csv'. Si no existe, copia el CSV allí o actualiza la ruta en el código."
+    if 'modelo' in t or 'model' in t or 'predict' in t:
+        return "Para habilitar predicciones ML debes tener 'exoplanet_classifier.joblib', 'scaler.joblib' y 'label_encoder.joblib' en la carpeta ML/. Si no están, el formulario seguirá permitiendo añadir exoplanetas pero sin predicción."
+    return "Puedo ayudarte con: cómo usar los simuladores 2D/3D, cómo añadir exoplanetas, o cómo preparar los archivos ML. Fórmulate una pregunta concreta o escribe 'ayuda'."
+
+with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
+    for role, msg in st.session_state.assistant_messages:
+        if role == 'bot':
+            st.markdown(f"**Asistente:** {msg}")
+        else:
+            st.markdown(f"**Tú:** {msg}")
+
+    with st.form("assistant_form"):
+        user_input = st.text_input("Escribe tu pregunta para el asistente:")
+        sent = st.form_submit_button("Enviar")
+    if sent and user_input:
+        st.session_state.assistant_messages.append(("user", user_input))
+        # Intentar pedir al backend local (/chat)
+        reply = None
+        try:
+            resp = requests.post("http://127.0.0.1:5000/chat", json={"message": user_input}, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                reply = data.get('response')
+            else:
+                reply = None
+        except Exception:
+            reply = None
+
+        if not reply:
+            reply = generate_fallback_reply(user_input)
+
+        st.session_state.assistant_messages.append(("bot", reply))
+        st.experimental_rerun()
 
 if page == "Simulador 2D":
     st.header("Simulador 2D")
@@ -187,6 +237,41 @@ if page == "Simulador 2D":
         st.markdown("---")
         st.subheader("Tabla de exoplanetas")
         st.dataframe(exo_df.reset_index(drop=True))
+
+elif page == "Simulador 3D":
+    st.header("Simulador 3D")
+    st.write("Visualización 3D interactiva de los exoplanetas. Usa los controles para ajustar tamaño y color.")
+
+    # Preparar datos 3D: usar RA/Dec y otra variable (p.e. distancia o pl_rade) como Z si está disponible
+    df3 = st.session_state.get('exo_df', pd.DataFrame()).copy()
+    if df3.empty:
+        st.info("No hay datos para mostrar en 3D. Asegúrate de tener 'exoplanets_visual.csv' en ML/ o agrega exoplanetas desde el simulador 2D.")
+    else:
+        # Si no hay columna de distancia, usar pl_rade como Z
+        if 'sy_dist' in df3.columns:
+            df3['z'] = pd.to_numeric(df3['sy_dist'], errors='coerce').fillna(df3['pl_rade'].astype(float).fillna(0.5))
+        else:
+            df3['z'] = df3['pl_rade'].astype(float).fillna(0.5)
+
+        z_scale = st.sidebar.slider("Escala Z", 0.1, 10.0, 1.0)
+        size_scale_3d = st.sidebar.slider("Escala tamaño 3D", 1.0, 50.0, 8.0)
+
+        try:
+            fig3 = px.scatter_3d(
+                df3,
+                x='x',
+                y='y',
+                z=df3['z'] * z_scale,
+                color='pl_eqt' if 'pl_eqt' in df3.columns else None,
+                size=df3['pl_rade'].astype(float).fillna(0.5) * size_scale_3d,
+                hover_name='pl_name',
+                hover_data=['hostname', 'pl_rade', 'pl_eqt'],
+                title='Simulación 3D de exoplanetas'
+            )
+            fig3.update_layout(height=750)
+            st.plotly_chart(fig3, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error creando la visualización 3D: {e}")
 
 elif page == "Clasificador ML":
     st.header("Clasificador de Exoplanetas (ML)")
