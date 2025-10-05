@@ -375,114 +375,196 @@ if page == "Simulador 2D":
 
 elif page == "Simulador 3D":
     st.header("Simulador 3D — Proyecto NASA")
-    st.write("Visualización 3D interactiva de los exoplanetas con estilo 'Proyecto NASA'. Usa los controles para ajustar filtros, escalas y animación de cámara.")
+    st.write("Visualización 3D interactiva de los exoplanetas. Basado en el proyecto NASA diseñado en la carpeta 'proyecto nasa'.")
 
-    # Preparar datos 3D: usar RA/Dec y otra variable (p.e. distancia o pl_rade) como Z si está disponible
+    # Constantes de conversión
+    PC_TO_LY = 3.26156
+    PC_TO_AU = 206264.8
+    DAY_TO_YEAR = 1 / 365.25
+    CAMERA_INITIAL_DISTANCE = 1500.0
+    CAMERA_SEARCH_ZOOM_FACTOR = 0.05
+    RANGO_MAX_FIJO_PC = 3000.0
+
+    # Cargar datos: preferir st.session_state.exo_df si existe, si no intentar leer el CSV del proyecto
     df3 = st.session_state.get('exo_df', pd.DataFrame()).copy()
     if df3.empty:
-        st.info("No hay datos para mostrar en 3D. Asegúrate de tener 'exoplanets_visual.csv' en ML/ o agrega exoplanetas desde el simulador 2D.")
-    else:
-        # Z preferente: sy_dist, si no pl_rade
-        if 'sy_dist' in df3.columns:
-            df3['z'] = pd.to_numeric(df3['sy_dist'], errors='coerce').fillna(df3['pl_rade'].astype(float).fillna(0.5))
-        else:
-            df3['z'] = df3['pl_rade'].astype(float).fillna(0.5)
-
-        # filtros y controles estilo proyecto
-        st.sidebar.subheader("Controles - Proyecto NASA")
-        methods = ['(todos)']
-        if 'discoverymethod' in df3.columns:
-            methods = ['(todos)'] + sorted(df3['discoverymethod'].dropna().unique().tolist())
-        sel_method = st.sidebar.selectbox("Filtrar por método de descubrimiento", methods)
-        year_min, year_max = None, None
-        if 'disc_year' in df3.columns:
+        project_csv = os.path.join(base_dir, 'proyecto nasa', 'exoplanets_visual.csv')
+        fallback_csv = os.path.join(base_dir, 'ML', 'exoplanets_visual.csv')
+        if os.path.exists(project_csv):
             try:
-                years = pd.to_numeric(df3['disc_year'], errors='coerce').dropna().astype(int)
-                if not years.empty:
-                    year_min = int(years.min())
-                    year_max = int(years.max())
-                    sel_year = st.sidebar.slider("Filtrar por año de descubrimiento", year_min, year_max, (year_min, year_max))
-                else:
-                    sel_year = None
+                df3 = pd.read_csv(project_csv)
             except Exception:
-                sel_year = None
+                df3 = pd.DataFrame()
+        elif os.path.exists(fallback_csv):
+            try:
+                df3 = pd.read_csv(fallback_csv)
+            except Exception:
+                df3 = pd.DataFrame()
+
+    if df3.empty:
+        st.info("No hay datos para mostrar en 3D. Coloca 'exoplanets_visual.csv' en 'proyecto nasa/' o en 'ML/' o añade exoplanetas desde el simulador 2D.")
+    else:
+        # Asegurar columnas y tipos
+        for col in ['ra', 'dec', 'sy_dist', 'st_teff', 'pl_name', 'pl_orbper', 'pl_eqt']:
+            if col not in df3.columns:
+                df3[col] = np.nan
+        for col in ['ra', 'dec', 'sy_dist', 'st_teff', 'pl_orbper', 'pl_eqt']:
+            df3[col] = pd.to_numeric(df3[col], errors='coerce')
+
+        # Filtrado suave similar al proyecto
+        df3 = df3.dropna(subset=['ra', 'dec', 'sy_dist', 'pl_name'])
+        df3 = df3[df3['sy_dist'] > 0.01]
+        df3 = df3[(df3['ra'] >= 0) & (df3['ra'] <= 360)]
+        df3 = df3[(df3['dec'] >= -90) & (df3['dec'] <= 90)]
+        df3 = df3[(df3['st_teff'] >= 1000) & (df3['st_teff'] <= 10000)]
+
+        # Unidades y controles
+        st.sidebar.subheader("Controles - Proyecto NASA")
+        unit = st.sidebar.selectbox("Unidades", options=['pc', 'ly', 'au'], index=0)
+        planet_options = sorted(df3['pl_name'].dropna().unique().tolist())
+        planet_sel = st.sidebar.selectbox("Buscar exoplaneta por nombre", options=['(ninguno)'] + planet_options)
+        unit_name = 'pc'
+        if unit == 'pc':
+            dist_col = 'sy_dist'
+            unit_name = 'pc'
+            factor_conversion = 1.0
+        elif unit == 'ly':
+            dist_col = 'sy_dist_ly' if 'sy_dist_ly' in df3.columns else 'sy_dist'
+            unit_name = 'al'
+            factor_conversion = PC_TO_LY
+            if 'sy_dist_ly' not in df3.columns:
+                df3['sy_dist_ly'] = df3['sy_dist'] * PC_TO_LY
         else:
-            sel_year = None
+            dist_col = 'sy_dist_au' if 'sy_dist_au' in df3.columns else 'sy_dist'
+            unit_name = 'UA'
+            factor_conversion = PC_TO_AU
+            if 'sy_dist_au' not in df3.columns:
+                df3['sy_dist_au'] = df3['sy_dist'] * PC_TO_AU
 
-        z_scale = st.sidebar.slider("Escala Z", 0.1, 10.0, 1.0)
-        size_scale_3d = st.sidebar.slider("Escala tamaño 3D", 1.0, 80.0, 12.0)
-        rotate_auto = st.sidebar.checkbox("Animar rotación de cámara", value=False)
+        # Convertir a radianes
+        df3['ra_rad'] = np.deg2rad(df3['ra'])
+        df3['dec_rad'] = np.deg2rad(df3['dec'])
 
-        plot_df = df3.copy()
-        # aplicar filtros
-        if sel_method and sel_method != '(todos)':
-            plot_df = plot_df[plot_df['discoverymethod'] == sel_method]
-        if sel_year is not None:
-            plot_df = plot_df[(pd.to_numeric(plot_df.get('disc_year'), errors='coerce') >= sel_year[0]) & (pd.to_numeric(plot_df.get('disc_year'), errors='coerce') <= sel_year[1])]
+        # Calcular coordenadas 3D
+        df3['x'] = df3[dist_col] * np.cos(df3['dec_rad']) * np.cos(df3['ra_rad'])
+        df3['y'] = df3[dist_col] * np.cos(df3['dec_rad']) * np.sin(df3['ra_rad'])
+        df3['z'] = df3[dist_col] * np.sin(df3['dec_rad'])
 
-        if plot_df.empty:
-            st.warning("No hay objetos que cumplan los filtros seleccionados.")
-        else:
-            # preparar valores para plot
-            xs = plot_df['x'].astype(float).tolist()
-            ys = plot_df['y'].astype(float).tolist()
-            zs = (plot_df['z'].astype(float) * z_scale).tolist()
-            names = plot_df.get('pl_name', plot_df.get('hostname', pd.Series(['']*len(plot_df)))).astype(str).tolist()
-            temps = plot_df['pl_eqt'].astype(float).fillna(0).tolist() if 'pl_eqt' in plot_df.columns else [0]*len(plot_df)
-            sizes = plot_df['pl_rade'].astype(float).fillna(0.5).tolist()
-            sizes_plot = [max(2, s) * (size_scale_3d/4.0) for s in sizes]
+        # Rango dinámico
+        RANGO_MAX_DINAMICO = RANGO_MAX_FIJO_PC * factor_conversion
+        RANGO_FIJO_DINAMICO = [-RANGO_MAX_DINAMICO, RANGO_MAX_DINAMICO]
 
-            # crear figura con go para mayor control
-            scatter = go.Scatter3d(
-                x=xs, y=ys, z=zs,
-                mode='markers',
-                marker=dict(
-                    size=sizes_plot,
-                    color=temps,
-                    colorscale='Turbo',
-                    colorbar=dict(title='Temp [K]'),
-                    opacity=0.9,
-                    line=dict(width=0)
-                ),
-                hovertemplate='<b>%{text}</b><br>RA: %{x:.3f}<br>Dec: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>',
-                text=names
-            )
+        # Colores por temp
+        temp_min_planet = df3['pl_eqt'].min()
+        temp_max_planet = df3['pl_eqt'].max()
+        if temp_min_planet == temp_max_planet or pd.isna(temp_min_planet) or pd.isna(temp_max_planet):
+            temp_min_planet = 100
+            temp_max_planet = 3000
 
-            # layout estilo NASA
-            camera = dict(eye=dict(x=1.6, y=1.6, z=0.9))
-            layout = go.Layout(
-                title=dict(text='Proyecto NASA — Simulación 3D de Exoplanetas', x=0.5, xanchor='center'),
-                scene=dict(
-                    bgcolor='black',
-                    xaxis=dict(title='RA (normalizado)', showgrid=False, zeroline=False, showticklabels=True, color='white'),
-                    yaxis=dict(title='Dec (normalizado)', showgrid=False, zeroline=False, showticklabels=True, color='white'),
-                    zaxis=dict(title='Z (dist / R)', showgrid=False, zeroline=False, showticklabels=True, color='white')
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=0, r=0, t=60, b=0),
-                scene_camera=camera,
-                height=780
-            )
+        # Cámara por defecto
+        INITIAL_DIST_ADJUSTED = CAMERA_INITIAL_DISTANCE * factor_conversion
+        default_camera = dict(
+            up=dict(x=0, y=0, z=1),
+            center=dict(x=0, y=0, z=0),
+            eye=dict(x=INITIAL_DIST_ADJUSTED, y=INITIAL_DIST_ADJUSTED, z=INITIAL_DIST_ADJUSTED)
+        )
 
-            fig3 = go.Figure(data=[scatter], layout=layout)
+        final_camera = default_camera
+        search_message = ""
+        fig_data_highlight = []
 
-            # si rotación automática está activada, generar frames para girar la cámara
-            if rotate_auto:
-                frames = []
-                n_frames = 36
-                radius = 1.8
-                for i, ang in enumerate(np.linspace(0, 2*np.pi, n_frames)):
-                    eye = dict(x=radius*np.cos(ang), y=radius*np.sin(ang), z=0.9)
-                    frames.append(go.Frame(name=str(i), layout=dict(scene_camera=dict(eye=eye))))
-                fig3.frames = frames
-                fig3.update_layout(
-                    updatemenus=[dict(type='buttons', showactive=False,
-                                      y=1, x=1.1, xanchor='right', yanchor='top',
-                                      buttons=[dict(label='Play', method='animate', args=[None, dict(frame=dict(duration=80, redraw=True), fromcurrent=True, transition=dict(duration=0))])])]
+        # Si se seleccionó un planeta, centrar y resaltar
+        if planet_sel and planet_sel != '(ninguno)':
+            sel_row = df3[df3['pl_name'] == planet_sel]
+            if not sel_row.empty:
+                x_t = sel_row['x'].iloc[0]
+                y_t = sel_row['y'].iloc[0]
+                z_t = sel_row['z'].iloc[0]
+                distancia_muestra = sel_row[dist_col].iloc[0]
+
+                MAX_FOR_ZOOM = RANGO_MAX_DINAMICO
+                zoom_dist_search = MAX_FOR_ZOOM * CAMERA_SEARCH_ZOOM_FACTOR
+                zoom_camera = dict(
+                    up=dict(x=0, y=0, z=1),
+                    center=dict(x=x_t, y=y_t, z=z_t),
+                    eye=dict(x=x_t + zoom_dist_search, y=y_t + zoom_dist_search, z=z_t + zoom_dist_search)
                 )
+                final_camera = zoom_camera
 
-            # mostrar figura
-            st.plotly_chart(fig3, use_container_width=True)
+                # estado confirmado/candidato heurístico
+                if planet_sel.split(' ')[-1].isalpha() and not planet_sel.endswith('.01'):
+                    estado = "CONFIRMADO ✅"
+                else:
+                    estado = "CANDIDATO ⚠️"
+
+                temp_eqt_val = sel_row['pl_eqt'].iloc[0]
+                temp_display = f"{temp_eqt_val:.0f} K" if not pd.isna(temp_eqt_val) else "N/D"
+
+                search_message = f"Estado: {estado} | Planeta: {planet_sel} | Distancia: {distancia_muestra:.2f} {unit_name} | T° Planeta: {temp_display}."
+
+                fig_data_highlight = [
+                    go.Scatter3d(
+                        x=[x_t], y=[y_t], z=[z_t], mode='markers',
+                        marker=dict(size=12, color='#00BFFF', symbol='circle', line=dict(width=2, color='white')),
+                        name=planet_sel, hoverinfo='text',
+                        text=[f"🌟 ¡OBJETO BUSCADO!<br>{planet_sel}<br>Dist: {distancia_muestra:.2f} {unit_name}<br>T: {temp_display}"],
+                        showlegend=False
+                    )
+                ]
+            else:
+                search_message = f"⚠️ Planeta '{planet_sel}' no encontrado en el dataset actual."
+
+        # Construir figura
+        fig = go.Figure(
+            data=[
+                go.Scatter3d(
+                    x=[0], y=[0], z=[0], mode='markers', marker=dict(size=8, color='yellow', symbol='diamond'), name='Sistema Solar',
+                    hoverinfo='text', text=["Sistema Solar (Tierra)"]
+                ),
+                # Construir textos de hover de forma segura
+                
+                per_series = df3.get('pl_orbper', pd.Series([np.nan]*len(df3)))
+                hover_texts = []
+                for n, d, t, p in zip(df3['pl_name'], df3[dist_col], df3['pl_eqt'], per_series):
+                    if pd.isna(t):
+                        hover_texts.append(f"Nombre: {n}<br>T° Planeta: N/D<br>Distancia: {d:.2f} {unit_name}")
+                    else:
+                        # convertir periodo a años si es posible
+                        try:
+                            per_yr = float(p) * DAY_TO_YEAR if (not pd.isna(p)) else None
+                        except Exception:
+                            per_yr = None
+                        if per_yr is not None and not pd.isna(per_yr):
+                            hover_texts.append(f"Nombre: {n}<br>T° Planeta: {t:.0f} K<br>Distancia: {d:.2f} {unit_name}<br>Período: {per_yr:.2f} años")
+                        else:
+                            hover_texts.append(f"Nombre: {n}<br>T° Planeta: {t:.0f} K<br>Distancia: {d:.2f} {unit_name}")
+
+                go.Scatter3d(
+                    x=df3['x'], y=df3['y'], z=df3['z'], mode='markers',
+                    marker=dict(size=4, color=df3['pl_eqt'], colorscale='Plasma', cmin=temp_min_planet, cmax=temp_max_planet,
+                                colorbar=dict(title='Temp. Planeta (K)', thickness=20), opacity=0.8, line=dict(width=0.2, color='white')),
+                    name='Exoplanetas',
+                    text=hover_texts,
+                    hoverinfo='text'
+                )
+            ] + fig_data_highlight,
+            layout=go.Layout(
+                title=f"Exoplanetas en 3D (Color por T° del Planeta, en {unit_name})",
+                scene=dict(
+                    xaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000000", gridcolor="#333333", zerolinecolor="#666666", title=f'X ({unit_name})'),
+                    yaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000000", gridcolor="#333333", zerolinecolor="#666666", title=f'Y ({unit_name})'),
+                    zaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000000", gridcolor="#333333", zerolinecolor="#666666", title=f'Z ({unit_name})'),
+                    aspectmode='cube',
+                    camera=final_camera,
+                    uirevision=planet_sel if planet_sel else 'PersistentView'
+                ),
+                height=820, paper_bgcolor="#111111", plot_bgcolor="#111111", font=dict(color='white'), margin=dict(l=0,r=0,t=40,b=0)
+            )
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+        if search_message:
+            st.markdown(f"**{search_message}**")
 
 elif page == "Clasificador ML":
     st.header("Clasificador de Exoplanetas (ML)")
