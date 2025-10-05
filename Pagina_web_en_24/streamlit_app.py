@@ -20,26 +20,56 @@ if os.path.exists(style_path):
         css = ""
 
 if css:
-    # Evitar reglas globales que rompan el layout de Streamlit (p.e. overflow: hidden en body)
-    css_safe = css
-    css_safe = css_safe.replace('body {', '/* body { */')
-    css_safe = css_safe.replace('overflow: hidden;', '/* overflow: hidden; */')
-    css_safe = css_safe.replace('height: 100vh;', '/* height: 100vh; */')
-    st.markdown(f"<style>{css_safe}</style>", unsafe_allow_html=True)
+        # Evitar reglas globales que rompan el layout de Streamlit (p.e. overflow: hidden en body)
+        css_safe = css
+        css_safe = css_safe.replace('body {', '/* body { */')
+        css_safe = css_safe.replace('overflow: hidden;', '/* overflow: hidden; */')
+        css_safe = css_safe.replace('height: 100vh;', '/* height: 100vh; */')
+        # Añadir reglas para ocultar elementos de Streamlit y estilizar botones
+        extra = '''
+        /* Ocultar barra superior y footer de Streamlit */
+        #MainMenu {visibility: hidden !important;}
+        footer {visibility: hidden !important;}
+        header {visibility: hidden !important;}
+        [data-testid="stToolbar"] {display:none !important;}
+
+        /* Estilo para botones de Streamlit para que coincidan con index.css */
+        .stButton>button, button[data-baseweb="button"] {
+            background-color: #00bfff !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 10px !important;
+            padding: 10px 16px !important;
+            font-weight: 700 !important;
+            box-shadow: 0 6px 18px rgba(0,191,255,0.12) !important;
+        }
+        .stButton>button:hover, button[data-baseweb="button"]:hover { background-color: #0077b3 !important; }
+
+        /* Ajustes del contenedor principal de Streamlit para centrar y dar espacio */
+        .app-view-container .main .block-container {
+            padding-top: 20px !important;
+            padding-left: 20px !important;
+            padding-right: 20px !important;
+            max-width: 1200px !important;
+            margin: 0 auto !important;
+            background: transparent !important;
+        }
+        '''
+        st.markdown(f"<style>{css_safe}\n{extra}</style>", unsafe_allow_html=True)
 
 # Visual header similar to index.html
 st.markdown(
-    """
-    <div class="stars"></div>
-    <div class="container" style="margin-bottom:20px;">
-      <h1>Exoplanet Explorer</h1>
-      <section class="intro">
-        <h2>Simulador y Clasificador</h2>
-        <p>Visualiza y explora exoplanetas con simuladores 2D y 3D. Añade objetos y usa el clasificador ML si tienes los modelos.</p>
-      </section>
-    </div>
-    """,
-    unsafe_allow_html=True,
+        """
+        <div class="stars" style="z-index:-1;"></div>
+        <div class="container" style="margin-bottom:20px;">
+            <h1>Exoplanet Explorer</h1>
+            <section class="intro">
+                <h2>Simulador y Clasificador</h2>
+                <p>Visualiza y explora exoplanetas con simuladores 2D y 3D. Añade objetos y usa el clasificador ML si tienes los modelos.</p>
+            </section>
+        </div>
+        """,
+        unsafe_allow_html=True,
 )
 
 # Páginas disponibles (usa session_state para sincronizar con botones del header)
