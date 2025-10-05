@@ -8,11 +8,106 @@ import plotly.express as px
 
 st.set_page_config(page_title="Simulador y Clasificador de Exoplanetas", layout="wide")
 
-st.title("Simulador y Clasificador de Exoplanetas")
+# Base dir para cargar assets (style.css)
+base_dir = os.path.dirname(__file__)
+style_path = os.path.join(base_dir, "style.css")
+css = ""
+if os.path.exists(style_path):
+    try:
+        with open(style_path, "r", encoding="utf-8") as f:
+            css = f.read()
+    except Exception:
+        css = ""
 
+if css:
+    # Evitar reglas globales que rompan el layout de Streamlit (p.e. overflow: hidden en body)
+    css_safe = css
+    css_safe = css_safe.replace('body {', '/* body { */')
+    css_safe = css_safe.replace('overflow: hidden;', '/* overflow: hidden; */')
+    css_safe = css_safe.replace('height: 100vh;', '/* height: 100vh; */')
+    st.markdown(f"<style>{css_safe}</style>", unsafe_allow_html=True)
+
+# Visual header similar to index.html
+st.markdown(
+    """
+    <div class="stars"></div>
+    <div class="container" style="margin-bottom:20px;">
+      <h1>Exoplanet Explorer</h1>
+      <section class="intro">
+        <h2>Simulador y Clasificador</h2>
+        <p>Visualiza y explora exoplanetas con simuladores 2D y 3D. Añade objetos y usa el clasificador ML si tienes los modelos.</p>
+      </section>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Páginas disponibles (usa session_state para sincronizar con botones del header)
+if 'page' not in st.session_state:
+    st.session_state.page = "Simulador 2D"
 st.sidebar.header("Navegación")
-# Páginas disponibles
-page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simulador 3D", "Clasificador ML"])
+page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simulador 3D", "Clasificador ML"], key='page')
+
+# Header quick buttons (visually similar to index.html)
+col1, col2, col3 = st.columns([1,1,6])
+with col1:
+    if st.button("Abrir Modelo 2D"):
+        st.session_state.page = "Simulador 2D"
+with col2:
+    if st.button("Abrir Modelo 3D"):
+        st.session_state.page = "Simulador 3D"
+with col3:
+    # placeholder for spacing/title already shown in the big container
+    st.write("")
+
+# Asegurar que 'page' refleja botones del header
+page = st.session_state.page
+
+# Render simple chat widget HTML (uses CSS from style.css)
+chat_html = '''
+<div class="chat-widget" id="chatWidget">
+    <div class="chat-header" onclick="toggleChat()">
+        Asistente 🤖
+        <span id="chatToggleIcon">▼</span>
+    </div>
+    <div class="chat-body" id="chatBody">
+        <div class="chat-messages" id="chatMessages">
+        </div>
+        <div class="chat-input">
+            <input type="text" id="userInput" placeholder="Escribe una pregunta...">
+            <button onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleChat(){
+    const b=document.getElementById('chatBody');
+    const ic=document.getElementById('chatToggleIcon');
+    if(b.style.display==='flex'){b.style.display='none';ic.style.transform='rotate(0deg)';}
+    else{b.style.display='flex';ic.style.transform='rotate(180deg)';}
+}
+async function sendMessage(){
+    const input=document.getElementById('userInput');
+    const text=input.value.trim(); if(!text) return;
+    // Add user message to local DOM
+    const msgs=document.getElementById('chatMessages');
+    const um=document.createElement('div'); um.className='user-message'; um.textContent=text; msgs.appendChild(um);
+    input.value=''; msgs.scrollTop=msgs.scrollHeight;
+    // Call backend (Streamlit assistant via sidebar form will also keep history);
+    try{
+        const resp=await fetch('/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})});
+        const data=await resp.json();
+        const bm=document.createElement('div'); bm.className='bot-message'; bm.textContent=data.response||data.error||'No hay respuesta'; msgs.appendChild(bm);
+    }catch(e){
+        const bm=document.createElement('div'); bm.className='bot-message'; bm.textContent='Asistente: '+(e.message||'Error en la conexión'); msgs.appendChild(bm);
+    }
+    msgs.scrollTop=msgs.scrollHeight;
+}
+</script>
+'''
+
+st.components.v1.html(chat_html, height=420)
 
 # --- Asistente virtual para usuarios noveles (barra lateral) ---
 if 'assistant_messages' not in st.session_state:
