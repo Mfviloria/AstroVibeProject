@@ -22,6 +22,15 @@ if 'assistant_messages' not in st.session_state:
 
 def generate_fallback_reply(user_text: str) -> str:
     t = user_text.lower()
+    # Preguntas sobre exoplanetas (español)
+    if 'exoplanet' in t or 'exoplaneta' in t or 'qué es un exoplaneta' in t or 'que es un exoplaneta' in t:
+        return (
+            "Un exoplaneta (o planeta extrasolar) es un planeta que orbita una estrella fuera del Sistema Solar. "
+            "Se detectan principalmente por el método del tránsito (cuando el planeta pasa frente a su estrella y produce una pequeña disminución del brillo), "
+            "por velocidades radiales (variaciones en la velocidad de la estrella debidas a la gravedad del planeta), y por imágenes directas o microlente gravitatoria. "
+            "Los exoplanetas pueden variar mucho en tamaño y temperatura: desde gigantes gaseosos más grandes que Júpiter hasta planetas rocosos más pequeños que la Tierra. "
+            "Si quieres, puedo explicarte con más detalle los métodos de detección o cómo interpretar las columnas del CSV de ejemplo."
+        )
     if '3d' in t or '3 d' in t:
         return "Para usar el simulador 3D: ve a 'Simulador 3D' desde el menú y usa los controles para ajustar la escala y colores. Si no ves puntos, comprueba que el CSV 'ML/exoplanets_visual.csv' existe."
     if '2d' in t:
@@ -59,8 +68,8 @@ with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
         if not reply:
             reply = generate_fallback_reply(user_input)
 
-        st.session_state.assistant_messages.append(("bot", reply))
-        st.experimental_rerun()
+    st.session_state.assistant_messages.append(("bot", reply))
+    # No forzamos rerun; Streamlit mostrará los nuevos mensajes en la próxima interacción
 
 if page == "Simulador 2D":
     st.header("Simulador 2D")
