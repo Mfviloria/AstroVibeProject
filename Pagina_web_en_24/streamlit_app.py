@@ -5,6 +5,7 @@ import os
 import requests
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Simulador y Clasificador de Exoplanetas", layout="wide")
 
@@ -373,39 +374,115 @@ if page == "Simulador 2D":
         st.dataframe(exo_df.reset_index(drop=True))
 
 elif page == "Simulador 3D":
-    st.header("Simulador 3D")
-    st.write("Visualización 3D interactiva de los exoplanetas. Usa los controles para ajustar tamaño y color.")
+    st.header("Simulador 3D — Proyecto NASA")
+    st.write("Visualización 3D interactiva de los exoplanetas con estilo 'Proyecto NASA'. Usa los controles para ajustar filtros, escalas y animación de cámara.")
 
     # Preparar datos 3D: usar RA/Dec y otra variable (p.e. distancia o pl_rade) como Z si está disponible
     df3 = st.session_state.get('exo_df', pd.DataFrame()).copy()
     if df3.empty:
         st.info("No hay datos para mostrar en 3D. Asegúrate de tener 'exoplanets_visual.csv' en ML/ o agrega exoplanetas desde el simulador 2D.")
     else:
-        # Si no hay columna de distancia, usar pl_rade como Z
+        # Z preferente: sy_dist, si no pl_rade
         if 'sy_dist' in df3.columns:
             df3['z'] = pd.to_numeric(df3['sy_dist'], errors='coerce').fillna(df3['pl_rade'].astype(float).fillna(0.5))
         else:
             df3['z'] = df3['pl_rade'].astype(float).fillna(0.5)
 
-        z_scale = st.sidebar.slider("Escala Z", 0.1, 10.0, 1.0)
-        size_scale_3d = st.sidebar.slider("Escala tamaño 3D", 1.0, 50.0, 8.0)
+        # filtros y controles estilo proyecto
+        st.sidebar.subheader("Controles - Proyecto NASA")
+        methods = ['(todos)']
+        if 'discoverymethod' in df3.columns:
+            methods = ['(todos)'] + sorted(df3['discoverymethod'].dropna().unique().tolist())
+        sel_method = st.sidebar.selectbox("Filtrar por método de descubrimiento", methods)
+        year_min, year_max = None, None
+        if 'disc_year' in df3.columns:
+            try:
+                years = pd.to_numeric(df3['disc_year'], errors='coerce').dropna().astype(int)
+                if not years.empty:
+                    year_min = int(years.min())
+                    year_max = int(years.max())
+                    sel_year = st.sidebar.slider("Filtrar por año de descubrimiento", year_min, year_max, (year_min, year_max))
+                else:
+                    sel_year = None
+            except Exception:
+                sel_year = None
+        else:
+            sel_year = None
 
-        try:
-            fig3 = px.scatter_3d(
-                df3,
-                x='x',
-                y='y',
-                z=df3['z'] * z_scale,
-                color='pl_eqt' if 'pl_eqt' in df3.columns else None,
-                size=df3['pl_rade'].astype(float).fillna(0.5) * size_scale_3d,
-                hover_name='pl_name',
-                hover_data=['hostname', 'pl_rade', 'pl_eqt'],
-                title='Simulación 3D de exoplanetas'
+        z_scale = st.sidebar.slider("Escala Z", 0.1, 10.0, 1.0)
+        size_scale_3d = st.sidebar.slider("Escala tamaño 3D", 1.0, 80.0, 12.0)
+        rotate_auto = st.sidebar.checkbox("Animar rotación de cámara", value=False)
+
+        plot_df = df3.copy()
+        # aplicar filtros
+        if sel_method and sel_method != '(todos)':
+            plot_df = plot_df[plot_df['discoverymethod'] == sel_method]
+        if sel_year is not None:
+            plot_df = plot_df[(pd.to_numeric(plot_df.get('disc_year'), errors='coerce') >= sel_year[0]) & (pd.to_numeric(plot_df.get('disc_year'), errors='coerce') <= sel_year[1])]
+
+        if plot_df.empty:
+            st.warning("No hay objetos que cumplan los filtros seleccionados.")
+        else:
+            # preparar valores para plot
+            xs = plot_df['x'].astype(float).tolist()
+            ys = plot_df['y'].astype(float).tolist()
+            zs = (plot_df['z'].astype(float) * z_scale).tolist()
+            names = plot_df.get('pl_name', plot_df.get('hostname', pd.Series(['']*len(plot_df)))).astype(str).tolist()
+            temps = plot_df['pl_eqt'].astype(float).fillna(0).tolist() if 'pl_eqt' in plot_df.columns else [0]*len(plot_df)
+            sizes = plot_df['pl_rade'].astype(float).fillna(0.5).tolist()
+            sizes_plot = [max(2, s) * (size_scale_3d/4.0) for s in sizes]
+
+            # crear figura con go para mayor control
+            scatter = go.Scatter3d(
+                x=xs, y=ys, z=zs,
+                mode='markers',
+                marker=dict(
+                    size=sizes_plot,
+                    color=temps,
+                    colorscale='Turbo',
+                    colorbar=dict(title='Temp [K]'),
+                    opacity=0.9,
+                    line=dict(width=0)
+                ),
+                hovertemplate='<b>%{text}</b><br>RA: %{x:.3f}<br>Dec: %{y:.3f}<br>Z: %{z:.3f}<extra></extra>',
+                text=names
             )
-            fig3.update_layout(height=750)
+
+            # layout estilo NASA
+            camera = dict(eye=dict(x=1.6, y=1.6, z=0.9))
+            layout = go.Layout(
+                title=dict(text='Proyecto NASA — Simulación 3D de Exoplanetas', x=0.5, xanchor='center'),
+                scene=dict(
+                    bgcolor='black',
+                    xaxis=dict(title='RA (normalizado)', showgrid=False, zeroline=False, showticklabels=True, color='white'),
+                    yaxis=dict(title='Dec (normalizado)', showgrid=False, zeroline=False, showticklabels=True, color='white'),
+                    zaxis=dict(title='Z (dist / R)', showgrid=False, zeroline=False, showticklabels=True, color='white')
+                ),
+                paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=60, b=0),
+                scene_camera=camera,
+                height=780
+            )
+
+            fig3 = go.Figure(data=[scatter], layout=layout)
+
+            # si rotación automática está activada, generar frames para girar la cámara
+            if rotate_auto:
+                frames = []
+                n_frames = 36
+                radius = 1.8
+                for i, ang in enumerate(np.linspace(0, 2*np.pi, n_frames)):
+                    eye = dict(x=radius*np.cos(ang), y=radius*np.sin(ang), z=0.9)
+                    frames.append(go.Frame(name=str(i), layout=dict(scene_camera=dict(eye=eye))))
+                fig3.frames = frames
+                fig3.update_layout(
+                    updatemenus=[dict(type='buttons', showactive=False,
+                                      y=1, x=1.1, xanchor='right', yanchor='top',
+                                      buttons=[dict(label='Play', method='animate', args=[None, dict(frame=dict(duration=80, redraw=True), fromcurrent=True, transition=dict(duration=0))])])]
+                )
+
+            # mostrar figura
             st.plotly_chart(fig3, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error creando la visualización 3D: {e}")
 
 elif page == "Clasificador ML":
     st.header("Clasificador de Exoplanetas (ML)")
