@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
+import plotly.express as px
 
 st.set_page_config(page_title="Simulador y Clasificador de Exoplanetas", layout="wide")
 
@@ -13,19 +14,65 @@ page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Clasif
 if page == "Simulador 2D":
     st.header("Simulador 2D")
     st.write("Aquí puedes mostrar tu simulador 2D. Puedes adaptar este espacio para mostrar visualizaciones, cargar datos, etc.")
-    if os.path.exists("ML/exoplanets_visual.csv"):
-        df = pd.read_csv("ML/exoplanets_visual.csv")
-        st.dataframe(df.head())
+    # Construir rutas relativas al archivo actual para evitar problemas con el cwd
+    base_dir = os.path.dirname(__file__)
+    data_path = os.path.join(base_dir, "ML", "exoplanets_visual.csv")
+    if os.path.exists(data_path):
+        try:
+            df = pd.read_csv(data_path)
+            # Preparar datos para visualización 2D
+            # Normalizar RA y Dec al rango 0-1 para visualización en canvas
+            if 'ra' in df.columns and 'dec' in df.columns:
+                df = df.copy()
+                df['x'] = (df['ra'] - df['ra'].min()) / (df['ra'].max() - df['ra'].min())
+                df['y'] = (df['dec'] - df['dec'].min()) / (df['dec'].max() - df['dec'].min())
+            else:
+                df['x'] = 0
+                df['y'] = 0
+
+            # Asegurar que la columna del radio exista y tenga valores numéricos
+            if 'pl_rade' in df.columns:
+                df['pl_rade'] = pd.to_numeric(df['pl_rade'], errors='coerce').fillna(0.5)
+            else:
+                df['pl_rade'] = 0.5
+
+            st.subheader("Tabla de ejemplo")
+            st.dataframe(df.head())
+
+            st.subheader("Visualización 2D interactiva")
+            # Control para tamaño de puntos
+            size_scale = st.sidebar.slider("Escala de tamaño de puntos", 1.0, 50.0, 10.0)
+
+            # Crear figura con Plotly
+            try:
+                fig = px.scatter(
+                    df,
+                    x='x',
+                    y='y',
+                    size=df['pl_rade'] * size_scale,
+                    color='discoverymethod' if 'discoverymethod' in df.columns else None,
+                    hover_data=['pl_name', 'hostname', 'pl_rade', 'pl_orbper'] if 'pl_name' in df.columns else None,
+                    title='Distribución 2D de exoplanetas (RA/Dec normalizados)',
+                    labels={'x': 'RA (normalizado)', 'y': 'Dec (normalizado)'}
+                )
+                fig.update_layout(height=600)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error creando la visualización: {e}")
+        except Exception as e:
+            st.error(f"Error leyendo el CSV en {data_path}: {e}")
     else:
-        st.info("No se encontró el archivo de datos para el simulador 2D.")
+        st.info(f"No se encontró el archivo de datos para el simulador 2D. Se buscó en: {data_path}")
 
 elif page == "Clasificador ML":
     st.header("Clasificador de Exoplanetas (ML)")
     st.write("Introduce los datos de un exoplaneta para predecir su clase.")
     try:
-        model = joblib.load("ML/exoplanet_classifier.joblib")
-        scaler = joblib.load("ML/scaler.joblib")
-        encoder = joblib.load("ML/label_encoder.joblib")
+        # Cargar modelos usando rutas relativas al archivo para mayor robustez
+        base_dir = os.path.dirname(__file__)
+        model = joblib.load(os.path.join(base_dir, "ML", "exoplanet_classifier.joblib"))
+        scaler = joblib.load(os.path.join(base_dir, "ML", "scaler.joblib"))
+        encoder = joblib.load(os.path.join(base_dir, "ML", "label_encoder.joblib"))
         st.subheader("Introduce los datos del exoplaneta:")
         # Los 11 features en orden:
         # koi_model_snr, koi_prad, koi_sma, koi_teq, koi_period, koi_duration, koi_depth, koi_steff, koi_slogg, koi_srad, koi_time0bk

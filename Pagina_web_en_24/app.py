@@ -50,7 +50,12 @@ def chat():
 
 @app.route("/exoplanets")
 def exoplanets():
-    df = pd.read_csv("exoplanets_visual.csv")
+    base_dir = os.path.dirname(__file__)
+    csv_path = os.path.join(base_dir, "exoplanets_visual.csv")
+    # Fallback to ML/ if the file is stored there
+    if not os.path.exists(csv_path):
+        csv_path = os.path.join(base_dir, "ML", "exoplanets_visual.csv")
+    df = pd.read_csv(csv_path)
 
     # Normalizar RA y Dec al rango 0-1 para el canvas
     df['x'] = (df['ra'] - df['ra'].min()) / (df['ra'].max() - df['ra'].min())
