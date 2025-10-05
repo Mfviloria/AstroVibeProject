@@ -404,6 +404,70 @@ elif page == "Simulador 3D":
     if df3.empty:
         st.info("No hay datos para mostrar en 3D. Coloca 'exoplanets_visual.csv' en 'proyecto nasa/' o en 'ML/' o añade exoplanetas desde el simulador 2D.")
     else:
+        # Cargar modelos ML si están disponibles (misma lógica que en otras pestañas)
+        model3, scaler3, encoder3 = None, None, None
+        try:
+            model3 = joblib.load(os.path.join(base_dir, "ML", "exoplanet_classifier.joblib"))
+            scaler3 = joblib.load(os.path.join(base_dir, "ML", "scaler.joblib"))
+            encoder3 = joblib.load(os.path.join(base_dir, "ML", "label_encoder.joblib"))
+        except Exception:
+            model3 = scaler3 = encoder3 = None
+
+        # Si existe predicción en los datos, mostrarla al seleccionar
+        # Añadir un formulario ML en la barra lateral para predecir y opcionalmente agregar al dataset
+        st.sidebar.subheader("Clasificador ML (Simulador 3D)")
+        with st.sidebar.form("ml_3d_form"):
+            st.markdown("Introduce las 11 features para predecir la clase del exoplaneta:")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                koi_model_snr_3 = st.number_input("Transit SNR", value=18.0, key='snr_3')
+                koi_prad_3 = st.number_input("Planetary Radius (koi_prad)", value=0.59, key='prad_3')
+                koi_sma_3 = st.number_input("Orbit SMA (koi_sma)", value=0.0739, key='sma_3')
+                koi_teq_3 = st.number_input("Equilibrium Temp (koi_teq)", value=443.0, key='teq_3')
+            with col2:
+                koi_period_3 = st.number_input("Orbital Period (koi_period)", value=10.3128, key='period_3')
+                koi_duration_3 = st.number_input("Transit Duration (koi_duration)", value=3.2, key='duration_3')
+                koi_depth_3 = st.number_input("Transit Depth (koi_depth)", value=0.45, key='depth_3')
+                koi_steff_3 = st.number_input("Stellar Teff (koi_steff)", value=5600.0, key='steff_3')
+            with col3:
+                koi_slogg_3 = st.number_input("Stellar logg (koi_slogg)", value=4.4, key='slogg_3')
+                koi_srad_3 = st.number_input("Stellar Radius (koi_srad)", value=0.98, key='srad_3')
+                koi_time0bk_3 = st.number_input("Transit Epoch (koi_time0bk)", value=2459000.123, key='time0bk_3')
+            add_to_plot = st.checkbox("Agregar punto al plot 3D con la predicción", value=False)
+            ml_submitted = st.form_submit_button("Predecir clase (ML)")
+
+        if ml_submitted:
+            if model3 is None or scaler3 is None or encoder3 is None:
+                st.sidebar.error("Modelo ML no encontrado en ML/. Coloca exoplanet_classifier.joblib, scaler.joblib y label_encoder.joblib en la carpeta ML/.")
+            else:
+                features3 = [[
+                    koi_model_snr_3, koi_prad_3, koi_sma_3, koi_teq_3, koi_period_3,
+                    koi_duration_3, koi_depth_3, koi_steff_3, koi_slogg_3, koi_srad_3, koi_time0bk_3
+                ]]
+                try:
+                    Xs3 = scaler3.transform(features3)
+                    p3 = model3.predict(Xs3)
+                    pred_label3 = encoder3.inverse_transform(p3)[0]
+                    st.sidebar.success(f"Predicción ML: {pred_label3}")
+                    # Si pide agregar al plot, crear fila mínima y añadir a st.session_state.exo_df
+                    if add_to_plot:
+                        # Normalizar coords sencillas: colocar en el centro
+                        new_name = f"ML_added_{len(st.session_state.exo_df) + 1}"
+                        new_row = {
+                            'pl_name': new_name,
+                            'hostname': new_name,
+                            'ra': 0.0,
+                            'dec': 0.0,
+                            'pl_rade': koi_prad_3,
+                            'pl_eqt': koi_teq_3,
+                            'x': 0.5,
+                            'y': 0.5,
+                            'pred_class': pred_label3
+                        }
+                        st.session_state.exo_df = pd.concat([st.session_state.exo_df, pd.DataFrame([new_row])], ignore_index=True)
+                        st.sidebar.info(f"Punto agregado: {new_name}")
+                except Exception as e:
+                    st.sidebar.error(f"Error en predicción ML: {e}")
         # Asegurar columnas y tipos
         for col in ['ra', 'dec', 'sy_dist', 'st_teff', 'pl_name', 'pl_orbper', 'pl_eqt']:
             if col not in df3.columns:
@@ -515,39 +579,40 @@ elif page == "Simulador 3D":
                 search_message = f"⚠️ Planeta '{planet_sel}' no encontrado en el dataset actual."
 
         # Construir figura
-        fig = go.Figure(
-            data=[
-                go.Scatter3d(
-                    x=[0], y=[0], z=[0], mode='markers', marker=dict(size=8, color='yellow', symbol='diamond'), name='Sistema Solar',
-                    hoverinfo='text', text=["Sistema Solar (Tierra)"]
-                ),
-                # Construir textos de hover de forma segura
-                
-                per_series = df3.get('pl_orbper', pd.Series([np.nan]*len(df3)))
-                hover_texts = []
-                for n, d, t, p in zip(df3['pl_name'], df3[dist_col], df3['pl_eqt'], per_series):
-                    if pd.isna(t):
-                        hover_texts.append(f"Nombre: {n}<br>T° Planeta: N/D<br>Distancia: {d:.2f} {unit_name}")
-                    else:
-                        # convertir periodo a años si es posible
-                        try:
-                            per_yr = float(p) * DAY_TO_YEAR if (not pd.isna(p)) else None
-                        except Exception:
-                            per_yr = None
-                        if per_yr is not None and not pd.isna(per_yr):
-                            hover_texts.append(f"Nombre: {n}<br>T° Planeta: {t:.0f} K<br>Distancia: {d:.2f} {unit_name}<br>Período: {per_yr:.2f} años")
-                        else:
-                            hover_texts.append(f"Nombre: {n}<br>T° Planeta: {t:.0f} K<br>Distancia: {d:.2f} {unit_name}")
+        # Preparar textos de hover fuera de la lista de datos para evitar sintaxis inválida
+        per_series = df3.get('pl_orbper', pd.Series([np.nan] * len(df3)))
+        hover_texts = []
+        for n, d, t, p in zip(df3['pl_name'], df3[dist_col], df3['pl_eqt'], per_series):
+            if pd.isna(t):
+                hover_texts.append(f"Nombre: {n}<br>T° Planeta: N/D<br>Distancia: {d:.2f} {unit_name}")
+            else:
+                # convertir periodo a años si es posible
+                try:
+                    per_yr = float(p) * DAY_TO_YEAR if (not pd.isna(p)) else None
+                except Exception:
+                    per_yr = None
+                if per_yr is not None and not pd.isna(per_yr):
+                    hover_texts.append(f"Nombre: {n}<br>T° Planeta: {t:.0f} K<br>Distancia: {d:.2f} {unit_name}<br>Período: {per_yr:.2f} años")
+                else:
+                    hover_texts.append(f"Nombre: {n}<br>T° Planeta: {t:.0f} K<br>Distancia: {d:.2f} {unit_name}")
 
-                go.Scatter3d(
-                    x=df3['x'], y=df3['y'], z=df3['z'], mode='markers',
-                    marker=dict(size=4, color=df3['pl_eqt'], colorscale='Plasma', cmin=temp_min_planet, cmax=temp_max_planet,
-                                colorbar=dict(title='Temp. Planeta (K)', thickness=20), opacity=0.8, line=dict(width=0.2, color='white')),
-                    name='Exoplanetas',
-                    text=hover_texts,
-                    hoverinfo='text'
-                )
-            ] + fig_data_highlight,
+        base_data = [
+            go.Scatter3d(
+                x=[0], y=[0], z=[0], mode='markers', marker=dict(size=8, color='yellow', symbol='diamond'), name='Sistema Solar',
+                hoverinfo='text', text=["Sistema Solar (Tierra)"]
+            ),
+            go.Scatter3d(
+                x=df3['x'], y=df3['y'], z=df3['z'], mode='markers',
+                marker=dict(size=4, color=df3['pl_eqt'], colorscale='Plasma', cmin=temp_min_planet, cmax=temp_max_planet,
+                            colorbar=dict(title='Temp. Planeta (K)', thickness=20), opacity=0.8, line=dict(width=0.2, color='white')),
+                name='Exoplanetas',
+                text=hover_texts,
+                hoverinfo='text'
+            )
+        ]
+
+        fig = go.Figure(
+            data=base_data + fig_data_highlight,
             layout=go.Layout(
                 title=f"Exoplanetas en 3D (Color por T° del Planeta, en {unit_name})",
                 scene=dict(
