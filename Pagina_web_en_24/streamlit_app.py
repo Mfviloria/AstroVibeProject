@@ -58,20 +58,7 @@ if css:
         '''
         st.markdown(f"<style>{css_safe}\n{extra}</style>", unsafe_allow_html=True)
 
-# Visual header similar to index.html
-st.markdown(
-        """
-        <div class="stars" style="z-index:-1;"></div>
-        <div class="container" style="margin-bottom:20px;">
-            <h1>Exoplanet Explorer</h1>
-            <section class="intro">
-                <h2>Simulador y Clasificador</h2>
-                <p>Visualiza y explora exoplanetas con simuladores 2D y 3D. Añade objetos y usa el clasificador ML si tienes los modelos.</p>
-            </section>
-        </div>
-        """,
-        unsafe_allow_html=True,
-)
+# NOTE: header/hero is rendered dynamically below (depends on selected `page`)
 
 # Páginas disponibles (usa session_state para sincronizar con botones del header)
 if 'page' not in st.session_state:
@@ -82,6 +69,35 @@ page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simula
 # Header quick buttons removed — la navegación ahora se gestiona únicamente desde el menú lateral
 # (mantener la variable `page` sincronizada con session_state)
 page = st.session_state.page
+
+# Dynamic hero: show intro cover or simulator preview depending on selected page
+def render_hero(page_selected: str):
+    intro_html = '''
+    <div class="hero" style="display:flex;align-items:center;justify-content:center;flex-direction:column;padding:40px 10px;margin-bottom:20px;">
+        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='240'><rect width='100%' height='100%' fill='%23010a12'/><text x='50%' y='40%' fill='%2300bfff' font-family='Orbitron, sans-serif' font-size='40' text-anchor='middle'>Exoplanet Explorer</text><text x='50%' y='70%' fill='%23ffffff' font-family='Arial' font-size='18' text-anchor='middle'>Simulador y Clasificador de Exoplanetas</text></svg>" style="max-width:100%;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,0.5);"/>
+    </div>
+    '''
+
+    sim2d_html = '''
+    <div class="hero" style="display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;margin-bottom:20px;">
+        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='240'><rect width='100%' height='100%' fill='%2300101a'/><text x='50%' y='50%' fill='%237ec8ff' font-family='Orbitron, sans-serif' font-size='30' text-anchor='middle'>Simulador 2D - Vista previa</text></svg>" style="max-width:100%;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.45);"/>
+    </div>
+    '''
+
+    sim3d_html = '''
+    <div class="hero" style="display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;margin-bottom:20px;">
+        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='240'><rect width='100%' height='100%' fill='%23000a14'/><text x='50%' y='50%' fill='%23a4d4ff' font-family='Orbitron, sans-serif' font-size='30' text-anchor='middle'>Simulador 3D - Vista previa</text></svg>" style="max-width:100%;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.45);"/>
+    </div>
+    '''
+
+    if page_selected == 'Simulador 2D':
+        st.markdown(sim2d_html, unsafe_allow_html=True)
+    elif page_selected == 'Simulador 3D':
+        st.markdown(sim3d_html, unsafe_allow_html=True)
+    else:
+        st.markdown(intro_html, unsafe_allow_html=True)
+
+render_hero(page)
 
 # Render simple chat widget HTML (uses CSS from style.css)
 chat_html = '''
