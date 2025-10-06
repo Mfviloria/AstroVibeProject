@@ -418,82 +418,122 @@ elif page == "Simulador 3D":
         except Exception:
             model3 = scaler3 = encoder3 = None
 
-        # Opciones de coloreado y controles ML
-        st.sidebar.subheader("Controles ML & Visualización")
-        color_mode = st.sidebar.selectbox("Colorear por:", options=['Temperatura', 'Clasificación ML'])
+        # Organizar UI al estilo Simulador 2D: dos columnas (controles a la izquierda, visualización a la derecha)
+        left, right = st.columns([1, 2])
 
-        # Si el modelo existe y el dataset tiene las features usadas por el clasificador, ofrecer predicción por lote
-        required_features = ['koi_model_snr', 'koi_prad', 'koi_sma', 'koi_teq', 'koi_period', 'koi_duration', 'koi_depth', 'koi_steff', 'koi_slogg', 'koi_srad', 'koi_time0bk']
-        can_batch_predict = model3 is not None and scaler3 is not None and encoder3 is not None and all(feat in df3.columns for feat in required_features)
-        if can_batch_predict:
-            if st.sidebar.button("Predecir clasificación ML para todo el dataset"):
-                try:
-                    X_batch = df3[required_features].fillna(0).astype(float).values
-                    Xs_batch = scaler3.transform(X_batch)
-                    preds = model3.predict(Xs_batch)
-                    df3['pred_class'] = encoder3.inverse_transform(preds)
-                    st.sidebar.success("Predicción por lote completada: columna 'pred_class' añadida al dataset.")
-                except Exception as e:
-                    st.sidebar.error(f"Error en predicción por lote: {e}")
-        else:
-            if model3 is None:
-                st.sidebar.info("Modelo ML no encontrado en ML/. Coloca exoplanet_classifier.joblib, scaler.joblib y label_encoder.joblib en la carpeta ML/.")
+        with left:
+            st.subheader("Controles & Clasificador ML")
+            color_mode = st.selectbox("Colorear por:", options=['Temperatura', 'Clasificación ML'])
+
+            # Predicción por lote si es posible
+            required_features = ['koi_model_snr', 'koi_prad', 'koi_sma', 'koi_teq', 'koi_period', 'koi_duration', 'koi_depth', 'koi_steff', 'koi_slogg', 'koi_srad', 'koi_time0bk']
+            can_batch_predict = model3 is not None and scaler3 is not None and encoder3 is not None and all(feat in df3.columns for feat in required_features)
+            if can_batch_predict:
+                if st.button("Predecir clasificación ML para todo el dataset"):
+                    try:
+                        X_batch = df3[required_features].fillna(0).astype(float).values
+                        Xs_batch = scaler3.transform(X_batch)
+                        preds = model3.predict(Xs_batch)
+                        df3['pred_class'] = encoder3.inverse_transform(preds)
+                        # Persist results back to session state so the plotting code uses the updated dataframe
+                        st.session_state['exo_df'] = df3
+                        st.success("Predicción por lote completada: columna 'pred_class' añadida al dataset.")
+                        # Rerun to force the UI/plot to refresh with the new 'pred_class' column
+                        try:
+                            st.experimental_rerun()
+                        except Exception:
+                            # In some testing environments rerun may raise; it's safe to continue without crashing
+                            pass
+                    except Exception as e:
+                        st.error(f"Error en predicción por lote: {e}")
             else:
-                st.sidebar.info("Dataset no contiene las features necesarias para predicción por lote. Puedes usar el formulario individual para predecir un punto.")
+                if model3 is None:
+                    st.info("Modelo ML no encontrado en ML/. Coloca exoplanet_classifier.joblib, scaler.joblib y label_encoder.joblib en la carpeta ML/.")
+                else:
+                    st.info("Dataset no contiene las features necesarias para predicción por lote. Puedes usar el formulario individual para predecir un punto.")
 
-        # Formulario ML individual (permanece, para predecir y agregar un punto al plot)
-        st.sidebar.subheader("Clasificador ML (Simulador 3D)")
-        with st.sidebar.form("ml_3d_form"):
-            st.markdown("Introduce las 11 features para predecir la clase del exoplaneta:")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                koi_model_snr_3 = st.number_input("Transit SNR", value=18.0, key='snr_3')
-                koi_prad_3 = st.number_input("Planetary Radius (koi_prad)", value=0.59, key='prad_3')
-                koi_sma_3 = st.number_input("Orbit SMA (koi_sma)", value=0.0739, key='sma_3')
-                koi_teq_3 = st.number_input("Equilibrium Temp (koi_teq)", value=443.0, key='teq_3')
-            with col2:
-                koi_period_3 = st.number_input("Orbital Period (koi_period)", value=10.3128, key='period_3')
-                koi_duration_3 = st.number_input("Transit Duration (koi_duration)", value=3.2, key='duration_3')
-                koi_depth_3 = st.number_input("Transit Depth (koi_depth)", value=0.45, key='depth_3')
-                koi_steff_3 = st.number_input("Stellar Teff (koi_steff)", value=5600.0, key='steff_3')
-            with col3:
-                koi_slogg_3 = st.number_input("Stellar logg (koi_slogg)", value=4.4, key='slogg_3')
-                koi_srad_3 = st.number_input("Stellar Radius (koi_srad)", value=0.98, key='srad_3')
-                koi_time0bk_3 = st.number_input("Transit Epoch (koi_time0bk)", value=2459000.123, key='time0bk_3')
-            add_to_plot = st.checkbox("Agregar punto al plot 3D con la predicción", value=False)
-            ml_submitted = st.form_submit_button("Predecir clase (ML)")
+            st.markdown("---")
+            st.subheader("Predecir y agregar (individual)")
+            with st.form("ml_3d_form_left"):
+                st.markdown("Introduce las 11 features para predecir la clase del exoplaneta:")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    koi_model_snr_3 = st.number_input("Transit SNR", value=18.0, key='snr_3_left')
+                    koi_prad_3 = st.number_input("Planetary Radius (koi_prad)", value=0.59, key='prad_3_left')
+                    koi_sma_3 = st.number_input("Orbit SMA (koi_sma)", value=0.0739, key='sma_3_left')
+                    koi_teq_3 = st.number_input("Equilibrium Temp (koi_teq)", value=443.0, key='teq_3_left')
+                with c2:
+                    koi_period_3 = st.number_input("Orbital Period (koi_period)", value=10.3128, key='period_3_left')
+                    koi_duration_3 = st.number_input("Transit Duration (koi_duration)", value=3.2, key='duration_3_left')
+                    koi_depth_3 = st.number_input("Transit Depth (koi_depth)", value=0.45, key='depth_3_left')
+                    koi_steff_3 = st.number_input("Stellar Teff (koi_steff)", value=5600.0, key='steff_3_left')
+                with c3:
+                    koi_slogg_3 = st.number_input("Stellar logg (koi_slogg)", value=4.4, key='slogg_3_left')
+                    koi_srad_3 = st.number_input("Stellar Radius (koi_srad)", value=0.98, key='srad_3_left')
+                    koi_time0bk_3 = st.number_input("Transit Epoch (koi_time0bk)", value=2459000.123, key='time0bk_3_left')
+                add_to_plot = st.checkbox("Agregar punto al plot 3D con la predicción", value=False)
+                ml_submitted = st.form_submit_button("Predecir clase (ML)")
 
-        if ml_submitted:
-            if model3 is None or scaler3 is None or encoder3 is None:
-                st.sidebar.error("Modelo ML no encontrado en ML/. Coloca exoplanet_classifier.joblib, scaler.joblib y label_encoder.joblib en la carpeta ML/.")
+            if ml_submitted:
+                if model3 is None or scaler3 is None or encoder3 is None:
+                    st.error("Modelo ML no encontrado en ML/. Coloca exoplanet_classifier.joblib, scaler.joblib y label_encoder.joblib en la carpeta ML/.")
+                else:
+                    features3 = [[
+                        koi_model_snr_3, koi_prad_3, koi_sma_3, koi_teq_3, koi_period_3,
+                        koi_duration_3, koi_depth_3, koi_steff_3, koi_slogg_3, koi_srad_3, koi_time0bk_3
+                    ]]
+                    try:
+                        Xs3 = scaler3.transform(features3)
+                        p3 = model3.predict(Xs3)
+                        pred_label3 = encoder3.inverse_transform(p3)[0]
+                        st.success(f"Predicción ML: {pred_label3}")
+                        if add_to_plot:
+                            new_name = f"ML_added_{len(st.session_state.exo_df) + 1}"
+                            new_row = {
+                                'pl_name': new_name,
+                                'hostname': new_name,
+                                'ra': 0.0,
+                                'dec': 0.0,
+                                'pl_rade': koi_prad_3,
+                                'pl_eqt': koi_teq_3,
+                                'x': 0.5,
+                                'y': 0.5,
+                                'pred_class': pred_label3
+                            }
+                            st.session_state.exo_df = pd.concat([st.session_state.exo_df, pd.DataFrame([new_row])], ignore_index=True)
+                            st.info(f"Punto agregado: {new_name}")
+                    except Exception as e:
+                        st.error(f"Error en predicción ML: {e}")
+
+            st.markdown("---")
+            st.subheader("Seleccionar/Información")
+            options3 = df3['hostname'].fillna(df3['pl_name']).astype(str).tolist()
+            selected3 = st.selectbox("Selecciona un exoplaneta para ver detalles", options=options3 if options3 else ["-"])
+            if selected3 and selected3 != "-":
+                row3 = df3[df3['hostname'].astype(str) == selected3].iloc[-1]
+                st.markdown(f"**Nombre:** {row3.get('pl_name', '')}")
+                st.markdown(f"**Radio:** {row3.get('pl_rade', '')} R⊕")
+                st.markdown(f"**Temperatura:** {row3.get('pl_eqt', '')} K")
+                st.markdown(f"**RA, Dec:** {row3.get('ra', '')}, {row3.get('dec', '')}")
+                if pd.notna(row3.get('pred_class')):
+                    st.markdown(f"**Predicción (ML):** {row3.get('pred_class')}")
+
+        with right:
+            # Aquí se renderiza la figura 3D (reutiliza el código de construcción de la figura más abajo)
+            st.subheader("Visualización 3D interactiva")
+            # escala de tamaño similar al 2D
+            size_scale_3d = st.slider("Escala de tamaño de puntos (3D)", 1.0, 50.0, 8.0)
+            # preparar tamaños de marker
+            df3['size_plot'] = df3['pl_rade'].astype(float).fillna(0.5) * size_scale_3d
+
+            # Marcar seleccionado para agrandar
+            if 'selected3' in locals() and selected3 and selected3 != "-":
+                df3['selected'] = df3['hostname'].astype(str) == selected3
+                df3.loc[df3['selected'], 'size_plot'] = df3.loc[df3['selected'], 'size_plot'] * 2.5
             else:
-                features3 = [[
-                    koi_model_snr_3, koi_prad_3, koi_sma_3, koi_teq_3, koi_period_3,
-                    koi_duration_3, koi_depth_3, koi_steff_3, koi_slogg_3, koi_srad_3, koi_time0bk_3
-                ]]
-                try:
-                    Xs3 = scaler3.transform(features3)
-                    p3 = model3.predict(Xs3)
-                    pred_label3 = encoder3.inverse_transform(p3)[0]
-                    st.sidebar.success(f"Predicción ML: {pred_label3}")
-                    # Si pide agregar al plot, crear fila mínima y añadir a st.session_state.exo_df
-                    if add_to_plot:
-                        new_name = f"ML_added_{len(st.session_state.exo_df) + 1}"
-                        new_row = {
-                            'pl_name': new_name,
-                            'hostname': new_name,
-                            'ra': 0.0,
-                            'dec': 0.0,
-                            'pl_rade': koi_prad_3,
-                            'pl_eqt': koi_teq_3,
-                            'x': 0.5,
-                            'y': 0.5,
-                            'pred_class': pred_label3
-                        }
-                        st.session_state.exo_df = pd.concat([st.session_state.exo_df, pd.DataFrame([new_row])], ignore_index=True)
-                        st.sidebar.info(f"Punto agregado: {new_name}")
-                except Exception as e:
-                    st.sidebar.error(f"Error en predicción ML: {e}")
+                df3['selected'] = False
+
+            # el plotting se realiza más abajo usando df3 y fig_data_highlight
         # Asegurar columnas y tipos
         for col in ['ra', 'dec', 'sy_dist', 'st_teff', 'pl_name', 'pl_orbper', 'pl_eqt']:
             if col not in df3.columns:
