@@ -195,7 +195,21 @@ with st.sidebar.expander("Beginner's Assistant 🤖", expanded=False):
         else:
             st.markdown(f"**You:** {msg}")
 
-    # Input removed by user request; assistant shows messages only in the sidebar.
+    # Campo de entrada para preguntas del usuario
+    user_question = st.text_input(
+        "Type your question here:",
+        key="assistant_input",
+        placeholder="How can I use the simulator?",
+    )
+    if st.button("Send question", key="send_question"):
+        if user_question and user_question.strip():
+            # Agregar pregunta del usuario
+            st.session_state.assistant_messages.append(("user", user_question))
+            # Generar respuesta del asistente
+            bot_reply = generate_fallback_reply(user_question)
+            st.session_state.assistant_messages.append(("bot", bot_reply))
+            # Recargar para mostrar la conversación actualizada
+            st.rerun()
 
 if page == "2D Simulator":
     st.header("2D Simulator")
