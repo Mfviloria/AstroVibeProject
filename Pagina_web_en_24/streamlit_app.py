@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
-import requests
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
@@ -47,13 +46,62 @@ if css:
         .stButton>button:hover, button[data-baseweb="button"]:hover { background-color: #0077b3 !important; }
 
         /* Ajustes del contenedor principal de Streamlit para usar todo el ancho */
-        .app-view-container .main .block-container {
-            padding-top: 20px !important;
-            padding-left: 18px !important;
-            padding-right: 18px !important;
+        /* Broad overrides to ensure main app content can use full width */
+        [data-testid="stAppViewContainer"] ,
+        .app-view-container,
+        .reportview-container,
+        .main,
+        .block-container,
+        .block-container .stApp {
             max-width: 100% !important;
+            width: 100% !important;
             margin: 0 !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
             background: transparent !important;
+        }
+
+        /* Leave a modest fixed sidebar width so main can expand fully */
+        [data-testid="stSidebar"],
+        [role="complementary"] {
+            width: 300px !important;
+            min-width: 300px !important;
+            max-width: 300px !important;
+        }
+
+        /* Fallback selectors for older/newer Streamlit versions */
+        .css-1d391kg .css-1outpf7 { width: calc(100% - 320px) !important; }
+
+        /* Ensure plotly charts and dataframes expand to container width */
+        .stPlotlyChart > div, .stPlotlyChart > div > div, .element-container .stPlotlyChart {
+            width: 100% !important;
+        }
+        .stDataFrame, .stDataFrame > div {
+            width: 100% !important;
+        }
+
+        /* Make the sidebar fixed on the left and shift the main content to the right */
+        [data-testid="stSidebar"] {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            height: 100vh !important;
+            overflow: auto !important;
+            z-index: 999 !important;
+        }
+
+        /* Shift the main block container right so it doesn't get overlapped by the fixed sidebar */
+        .app-view-container .main .block-container,
+        [data-testid="stAppViewContainer"] .main .block-container,
+        .reportview-container .main .block-container,
+        .block-container {
+            margin-left: 320px !important;
+            width: calc(100% - 320px) !important;
+        }
+
+        /* Ensure widgets inside main expand correctly */
+        .stContainer, .main > .block-container > div {
+            width: 100% !important;
         }
         '''
         st.markdown(f"<style>{css_safe}\n{extra}</style>", unsafe_allow_html=True)
@@ -78,66 +126,24 @@ def render_hero(page_selected: str):
     </div>
     '''
 
+    # Simple compact hero: show page title and short subtitle
     sim2d_html = '''
-    <div class="hero" style="display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;margin-bottom:20px;">
-        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='240'><rect width='100%' height='100%' fill='%2300101a'/><text x='50%' y='50%' fill='%237ec8ff' font-family='Orbitron, sans-serif' font-size='30' text-anchor='middle'>Simulador 2D - Vista previa</text></svg>" style="max-width:100%;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.45);"/>
+    <div class="hero" style="padding:18px 8px;margin-bottom:12px;">
+        <h2 style="color:#aee9ff;margin:0;font-family:Orbitron, sans-serif;">Exoplanet Explorer</h2>
+        <div style="color:#dfefff;margin-top:6px;">Simulador y Clasificador de Exoplanetas — {page}</div>
     </div>
     '''
-
-    sim3d_html = '''
-    <!-- Simulador 3D preview removed for cleaner UX -->
-    '''
+    # Use same compact hero for 3D preview placeholder (removed graphic)
+    sim3d_html = sim2d_html
 
     if page_selected == 'Simulador 2D':
-        st.markdown(sim2d_html, unsafe_allow_html=True)
+        st.markdown(sim2d_html.format(page='Simulador 2D'), unsafe_allow_html=True)
     elif page_selected == 'Simulador 3D':
-        st.markdown(sim3d_html, unsafe_allow_html=True)
+        st.markdown(sim3d_html.format(page='Simulador 3D'), unsafe_allow_html=True)
     else:
         st.markdown(intro_html, unsafe_allow_html=True)
 
 render_hero(page)
-
-# Render simple chat widget HTML (uses CSS from style.css) but only show it on the main menu ('Clasificador ML')
-chat_html = '''
-<div class="chat-widget" id="chatWidget">
-    <div class="chat-header" onclick="toggleChat()">
-        Asistente
-        <span id="chatToggleIcon">▼</span>
-    </div>
-    <div class="chat-body" id="chatBody">
-        <div class="chat-messages" id="chatMessages">
-        </div>
-        <!-- Input removed for cleaner UX; assistant interactions use sidebar form -->
-    </div>
-</div>
-
-<script>
-function toggleChat(){
-    const b=document.getElementById('chatBody');
-    const ic=document.getElementById('chatToggleIcon');
-    if(b.style.display==='flex'){b.style.display='none';ic.style.transform='rotate(0deg)';}
-    else{b.style.display='flex';ic.style.transform='rotate(180deg)';}
-}
-async function sendMessage(){
-    const input=document.getElementById('userInput');
-    const text=input.value.trim(); if(!text) return;
-    const msgs=document.getElementById('chatMessages');
-    const um=document.createElement('div'); um.className='user-message'; um.textContent=text; msgs.appendChild(um);
-    input.value=''; msgs.scrollTop=msgs.scrollHeight;
-    try{
-        const resp=await fetch('/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})});
-        const data=await resp.json();
-        const bm=document.createElement('div'); bm.className='bot-message'; bm.textContent=data.response||data.error||'No hay respuesta'; msgs.appendChild(bm);
-    }catch(e){
-        const bm=document.createElement('div'); bm.className='bot-message'; bm.textContent='Asistente: '+(e.message||'Error en la conexión'); msgs.appendChild(bm);
-    }
-    msgs.scrollTop=msgs.scrollHeight;
-}
-</script>
-'''
-
-# Render the floating chat widget on all pages (original behavior)
-st.components.v1.html(chat_html, height=420)
 
 # --- Asistente virtual para usuarios noveles (barra lateral) ---
 if 'assistant_messages' not in st.session_state:
@@ -235,10 +241,8 @@ if page == "Simulador 2D":
         # no hay modelo disponible; la sección de clasificación seguirá funcionando en su propio tab
         model = scaler = encoder = None
 
-    # UI: Dos columnas, a la izquierda controles/tabla, a la derecha visualización
-    left, right = st.columns([1, 2])
-
-    with left:
+    # Move controls to the sidebar so main content can use full width
+    with st.sidebar.expander("Agregar nuevo exoplaneta", expanded=False):
         st.subheader("Agregar nuevo exoplaneta")
         with st.form("add_exo_form"):
             name = st.text_input("Nombre")
@@ -259,9 +263,8 @@ if page == "Simulador 2D":
 
         if submitted:
             if not name:
-                st.warning("Introduce un nombre para el exoplaneta")
+                st.sidebar.warning("Introduce un nombre para el exoplaneta")
             else:
-                # preparar features para el modelo (si existe)
                 features = [snr, rade, sma, eqt, period, dur, depth, steff, slogg, srad, time0bk]
                 pred_label = None
                 if model is not None and scaler is not None and encoder is not None:
@@ -270,9 +273,8 @@ if page == "Simulador 2D":
                         p = model.predict(Xs)
                         pred_label = encoder.inverse_transform(p)[0]
                     except Exception as e:
-                        st.error(f"Error al predecir: {e}")
+                        st.sidebar.error(f"Error al predecir: {e}")
 
-                # Normalizar coords según los rangos actuales en exo_df (si hay datos)
                 try:
                     if len(exo_df) > 0 and 'ra' in exo_df.columns and 'dec' in exo_df.columns and exo_df['ra'].notnull().any():
                         x0 = (ra - exo_df['ra'].min()) / (exo_df['ra'].max() - exo_df['ra'].min())
@@ -295,9 +297,10 @@ if page == "Simulador 2D":
                 }
                 exo_df = pd.concat([exo_df, pd.DataFrame([new_row])], ignore_index=True)
                 st.session_state.exo_df = exo_df
-                st.success(f"Exoplaneta '{name}' agregado." + (f" Predicción: {pred_label}" if pred_label is not None else ""))
+                st.sidebar.success(f"Exoplaneta '{name}' agregado." + (f" Predicción: {pred_label}" if pred_label is not None else ""))
 
-        st.markdown("---")
+    # Selection/info in sidebar
+    with st.sidebar.expander("Seleccionar / Información", expanded=False):
         st.subheader("Seleccionar/Información")
         options = exo_df['hostname'].fillna(exo_df['pl_name']).astype(str).tolist()
         selected = st.selectbox("Selecciona un exoplaneta para ver detalles", options=options if options else ["-"])
@@ -309,46 +312,88 @@ if page == "Simulador 2D":
             st.markdown(f"**RA, Dec:** {row.get('ra', '')}, {row.get('dec', '')}")
             if pd.notna(row.get('pred_class')):
                 st.markdown(f"**Predicción (ML):** {row.get('pred_class')}")
-            # Información KOI si existe
             koi_key = str(selected)
             if koi_key in koi_dict:
                 k = koi_dict[koi_key]
                 st.markdown(f"**KOI disposition:** {k.get('koi_disposition')}")
                 st.markdown(f"**KOI prad:** {k.get('koi_prad')}")
 
-    with right:
-        st.subheader("Visualización 2D interactiva")
-        size_scale = st.sidebar.slider("Escala de tamaño de puntos", 1.0, 50.0, 10.0)
+    # Main visualization area (full width) - 2D simulator
+    st.markdown("<div style='font-size:18px;color:#aee9ff;margin-bottom:6px;font-weight:600;'>Simulador 2D</div>", unsafe_allow_html=True)
 
-        plot_df = exo_df.copy()
-        plot_df['size_plot'] = plot_df['pl_rade'].astype(float).fillna(0.5) * size_scale
-        # Marcar seleccionado para agrandar
-        if selected and selected != "-":
-            plot_df['selected'] = plot_df['hostname'].astype(str) == selected
-            # Aumentar tamaño del seleccionado
-            plot_df.loc[plot_df['selected'], 'size_plot'] = plot_df.loc[plot_df['selected'], 'size_plot'] * 2.5
+    # Compact controls that live above the plot (do not take much horizontal room)
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([3, 2, 1])
+    with ctrl_col1:
+        # Color mode: Temperature or ML class (if available)
+        color_mode = st.radio("Colorear por:", options=['Temperatura', 'Clasificación ML'], index=0, horizontal=True)
+    with ctrl_col2:
+        show_labels = st.checkbox("Mostrar nombres", value=False)
+    with ctrl_col3:
+        normalize_coords = st.checkbox("Normalizar coords", value=True)
+
+    # point size comes from the sidebar slider to keep the main view compact
+    size_scale = st.sidebar.slider("Escala de tamaño de puntos (2D)", 1.0, 50.0, 10.0)
+
+    # Summary stats
+    total = len(exo_df)
+    col_a, col_b = st.columns(2)
+    col_a.metric("Exoplanetas", f"{total}")
+    avg_temp = int(exo_df['pl_eqt'].dropna().mean()) if 'pl_eqt' in exo_df.columns and not exo_df['pl_eqt'].dropna().empty else 'N/A'
+    col_b.metric("Temp. media (K)", f"{avg_temp}")
+
+    plot_df = exo_df.copy()
+    plot_df['size_plot'] = plot_df['pl_rade'].astype(float).fillna(0.5) * size_scale
+    # Marcar seleccionado para agrandar
+    if selected and selected != "-":
+        plot_df['selected'] = plot_df['hostname'].astype(str) == selected
+        # Aumentar tamaño del seleccionado
+        plot_df.loc[plot_df['selected'], 'size_plot'] = plot_df.loc[plot_df['selected'], 'size_plot'] * 2.5
+    else:
+        plot_df['selected'] = False
+
+    try:
+        # Determine color mapping
+        if color_mode == 'Clasificación ML' and 'pred_class' in plot_df.columns:
+            color_col = 'pred_class'
         else:
-            plot_df['selected'] = False
+            # fallback to temperature continuous color
+            color_col = 'pl_eqt' if 'pl_eqt' in plot_df.columns else None
 
-        try:
-            fig = px.scatter(
-                plot_df,
-                x='x',
-                y='y',
-                size='size_plot',
-                color='pl_eqt' if 'pl_eqt' in plot_df.columns else None,
-                hover_name='pl_name',
-                hover_data=['hostname', 'pl_rade', 'pl_eqt'],
-                title='Distribución 2D de exoplanetas (RA/Dec normalizados)',
-                labels={'x': 'RA (normalizado)', 'y': 'Dec (normalizado)'}
-            )
-            fig.update_layout(height=700)
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error creando la visualización: {e}")
+        # Optionally normalize x/y for better spread
+        if normalize_coords and 'x' in plot_df.columns and 'y' in plot_df.columns:
+            # re-normalize to 0-1 range
+            try:
+                plot_df['x_norm'] = (plot_df['x'] - plot_df['x'].min()) / (plot_df['x'].max() - plot_df['x'].min())
+                plot_df['y_norm'] = (plot_df['y'] - plot_df['y'].min()) / (plot_df['y'].max() - plot_df['y'].min())
+                x_field, y_field = 'x_norm', 'y_norm'
+            except Exception:
+                x_field, y_field = 'x', 'y'
+        else:
+            x_field, y_field = 'x', 'y'
 
-        st.markdown("---")
-        st.subheader("Tabla de exoplanetas")
+        fig = px.scatter(
+            plot_df,
+            x=x_field,
+            y=y_field,
+            size='size_plot',
+            color=color_col,
+            hover_name='pl_name',
+            hover_data=['hostname', 'pl_rade', 'pl_eqt', 'pred_class'] if 'pred_class' in plot_df.columns else ['hostname', 'pl_rade', 'pl_eqt'],
+            title='Distribución 2D de exoplanetas',
+            labels={x_field: 'X (normalizado)' if x_field.endswith('_norm') else 'X', y_field: 'Y (normalizado)' if y_field.endswith('_norm') else 'Y'}
+        )
+        fig.update_layout(height=700)
+        # Optionally show labels as annotations if requested (keeps chart light otherwise)
+        if show_labels:
+            for i, r in plot_df.dropna(subset=['pl_name']).iterrows():
+                fig.add_annotation(x=r[x_field], y=r[y_field], text=str(r['pl_name']), showarrow=False, font=dict(size=9), opacity=0.8)
+
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True})
+    except Exception as e:
+        st.error(f"Error creando la visualización: {e}")
+
+    # Put the table in an expander to reduce clutter
+    with st.expander("Tabla de exoplanetas (mostrar/ocultar)", expanded=False):
         st.dataframe(exo_df.reset_index(drop=True))
 
 elif page == "Simulador 3D":
@@ -391,14 +436,11 @@ elif page == "Simulador 3D":
         except Exception:
             model3 = scaler3 = encoder3 = None
 
-        # Organizar UI al estilo Simulador 2D: dos columnas (controles a la izquierda, visualización a la derecha)
-        left, right = st.columns([1, 2])
-
-        with left:
+        # Move 3D controls and ML forms to the sidebar so the 3D canvas can fill the page
+        with st.sidebar.expander("Controles & Clasificador ML", expanded=False):
             st.subheader("Controles & Clasificador ML")
             color_mode = st.selectbox("Colorear por:", options=['Temperatura', 'Clasificación ML'])
 
-            # Predicción por lote si es posible
             required_features = ['koi_model_snr', 'koi_prad', 'koi_sma', 'koi_teq', 'koi_period', 'koi_duration', 'koi_depth', 'koi_steff', 'koi_slogg', 'koi_srad', 'koi_time0bk']
             can_batch_predict = model3 is not None and scaler3 is not None and encoder3 is not None and all(feat in df3.columns for feat in required_features)
             if can_batch_predict:
@@ -408,14 +450,11 @@ elif page == "Simulador 3D":
                         Xs_batch = scaler3.transform(X_batch)
                         preds = model3.predict(Xs_batch)
                         df3['pred_class'] = encoder3.inverse_transform(preds)
-                        # Persist results back to session state so the plotting code uses the updated dataframe
                         st.session_state['exo_df'] = df3
                         st.success("Predicción por lote completada: columna 'pred_class' añadida al dataset.")
-                        # Rerun to force the UI/plot to refresh with the new 'pred_class' column
                         try:
                             st.experimental_rerun()
                         except Exception:
-                            # In some testing environments rerun may raise; it's safe to continue without crashing
                             pass
                     except Exception as e:
                         st.error(f"Error en predicción por lote: {e}")
@@ -482,31 +521,21 @@ elif page == "Simulador 3D":
             st.subheader("Seleccionar/Información")
             options3 = df3['hostname'].fillna(df3['pl_name']).astype(str).tolist()
             selected3 = st.selectbox("Selecciona un exoplaneta para ver detalles", options=options3 if options3 else ["-"])
-            if selected3 and selected3 != "-":
-                row3 = df3[df3['hostname'].astype(str) == selected3].iloc[-1]
-                st.markdown(f"**Nombre:** {row3.get('pl_name', '')}")
-                st.markdown(f"**Radio:** {row3.get('pl_rade', '')} R⊕")
-                st.markdown(f"**Temperatura:** {row3.get('pl_eqt', '')} K")
-                st.markdown(f"**RA, Dec:** {row3.get('ra', '')}, {row3.get('dec', '')}")
-                if pd.notna(row3.get('pred_class')):
-                    st.markdown(f"**Predicción (ML):** {row3.get('pred_class')}")
 
-        with right:
-            # Aquí se renderiza la figura 3D (reutiliza el código de construcción de la figura más abajo)
-            st.subheader("Visualización 3D interactiva")
-            # escala de tamaño similar al 2D
-            size_scale_3d = st.slider("Escala de tamaño de puntos (3D)", 1.0, 50.0, 8.0)
-            # preparar tamaños de marker
-            df3['size_plot'] = df3['pl_rade'].astype(float).fillna(0.5) * size_scale_3d
+        # Main 3D area: compact header and sidebar slider for marker size
+        st.markdown("<div style='font-size:16px;color:#aee9ff;margin-bottom:6px;'>Visualización 3D</div>", unsafe_allow_html=True)
+        size_scale_3d = st.sidebar.slider("Escala de tamaño de puntos (3D)", 1.0, 50.0, 8.0)
+        # preparar tamaños de marker
+        df3['size_plot'] = df3['pl_rade'].astype(float).fillna(0.5) * size_scale_3d
 
-            # Marcar seleccionado para agrandar
-            if 'selected3' in locals() and selected3 and selected3 != "-":
-                df3['selected'] = df3['hostname'].astype(str) == selected3
-                df3.loc[df3['selected'], 'size_plot'] = df3.loc[df3['selected'], 'size_plot'] * 2.5
-            else:
-                df3['selected'] = False
+        # Marcar seleccionado para agrandar
+        if 'selected3' in locals() and selected3 and selected3 != "-":
+            df3['selected'] = df3['hostname'].astype(str) == selected3
+            df3.loc[df3['selected'], 'size_plot'] = df3.loc[df3['selected'], 'size_plot'] * 2.5
+        else:
+            df3['selected'] = False
 
-            # el plotting se realiza más abajo usando df3 y fig_data_highlight
+        # el plotting se realiza más abajo usando df3 y fig_data_highlight
         # Asegurar columnas y tipos
         for col in ['ra', 'dec', 'sy_dist', 'st_teff', 'pl_name', 'pl_orbper', 'pl_eqt']:
             if col not in df3.columns:
@@ -564,58 +593,61 @@ elif page == "Simulador 3D":
             temp_min_planet = 100
             temp_max_planet = 3000
 
-        # Cámara por defecto
-        INITIAL_DIST_ADJUSTED = CAMERA_INITIAL_DISTANCE * factor_conversion
-        default_camera = dict(
-            up=dict(x=0, y=0, z=1),
-            center=dict(x=0, y=0, z=0),
-            eye=dict(x=INITIAL_DIST_ADJUSTED, y=INITIAL_DIST_ADJUSTED, z=INITIAL_DIST_ADJUSTED)
-        )
+    # Cámara por defecto
+    # Permitir al usuario ajustar el zoom inicial desde la sidebar (valor menor = más cerca, mayor zoom)
+    camera_distance = st.sidebar.slider("Zoom inicial (distancia de cámara)", min_value=100.0, max_value=10000.0, value=float(CAMERA_INITIAL_DISTANCE), step=50.0)
+    INITIAL_DIST_ADJUSTED = float(camera_distance) * factor_conversion
 
-        final_camera = default_camera
-        search_message = ""
-        fig_data_highlight = []
+    default_camera = dict(
+        up=dict(x=0, y=0, z=1),
+        center=dict(x=0, y=0, z=0),
+        eye=dict(x=INITIAL_DIST_ADJUSTED, y=INITIAL_DIST_ADJUSTED, z=INITIAL_DIST_ADJUSTED)
+    )
 
-        # Si se seleccionó un planeta, centrar y resaltar
-        if planet_sel and planet_sel != '(ninguno)':
-            sel_row = df3[df3['pl_name'] == planet_sel]
-            if not sel_row.empty:
-                x_t = sel_row['x'].iloc[0]
-                y_t = sel_row['y'].iloc[0]
-                z_t = sel_row['z'].iloc[0]
-                distancia_muestra = sel_row[dist_col].iloc[0]
+    final_camera = default_camera
+    search_message = ""
+    fig_data_highlight = []
 
-                MAX_FOR_ZOOM = RANGO_MAX_DINAMICO
-                zoom_dist_search = MAX_FOR_ZOOM * CAMERA_SEARCH_ZOOM_FACTOR
-                zoom_camera = dict(
-                    up=dict(x=0, y=0, z=1),
-                    center=dict(x=x_t, y=y_t, z=z_t),
-                    eye=dict(x=x_t + zoom_dist_search, y=y_t + zoom_dist_search, z=z_t + zoom_dist_search)
-                )
-                final_camera = zoom_camera
+    # Si se seleccionó un planeta, centrar y resaltar
+    if planet_sel and planet_sel != '(ninguno)':
+        sel_row = df3[df3['pl_name'] == planet_sel]
+        if not sel_row.empty:
+            x_t = sel_row['x'].iloc[0]
+            y_t = sel_row['y'].iloc[0]
+            z_t = sel_row['z'].iloc[0]
+            distancia_muestra = sel_row[dist_col].iloc[0]
 
-                # estado confirmado/candidato heurístico
-                if planet_sel.split(' ')[-1].isalpha() and not planet_sel.endswith('.01'):
-                    estado = "CONFIRMADO ✅"
-                else:
-                    estado = "CANDIDATO ⚠️"
+            MAX_FOR_ZOOM = RANGO_MAX_DINAMICO
+            zoom_dist_search = MAX_FOR_ZOOM * CAMERA_SEARCH_ZOOM_FACTOR
+            zoom_camera = dict(
+                up=dict(x=0, y=0, z=1),
+                center=dict(x=x_t, y=y_t, z=z_t),
+                eye=dict(x=x_t + zoom_dist_search, y=y_t + zoom_dist_search, z=z_t + zoom_dist_search)
+            )
+            final_camera = zoom_camera
 
-                temp_eqt_val = sel_row['pl_eqt'].iloc[0]
-                temp_display = f"{temp_eqt_val:.0f} K" if not pd.isna(temp_eqt_val) else "N/D"
-
-                search_message = f"Estado: {estado} | Planeta: {planet_sel} | Distancia: {distancia_muestra:.2f} {unit_name} | T° Planeta: {temp_display}."
-
-                fig_data_highlight = [
-                    go.Scatter3d(
-                        x=[x_t], y=[y_t], z=[z_t], mode='markers',
-                        marker=dict(size=12, color='#00BFFF', symbol='circle', line=dict(width=2, color='white')),
-                        name=planet_sel, hoverinfo='text',
-                        text=[f"🌟 ¡OBJETO BUSCADO!<br>{planet_sel}<br>Dist: {distancia_muestra:.2f} {unit_name}<br>T: {temp_display}"],
-                        showlegend=False
-                    )
-                ]
+            # estado confirmado/candidato heurístico
+            if planet_sel.split(' ')[-1].isalpha() and not planet_sel.endswith('.01'):
+                estado = "CONFIRMADO ✅"
             else:
-                search_message = f"⚠️ Planeta '{planet_sel}' no encontrado en el dataset actual."
+                estado = "CANDIDATO ⚠️"
+
+            temp_eqt_val = sel_row['pl_eqt'].iloc[0]
+            temp_display = f"{temp_eqt_val:.0f} K" if not pd.isna(temp_eqt_val) else "N/D"
+
+            search_message = f"Estado: {estado} | Planeta: {planet_sel} | Distancia: {distancia_muestra:.2f} {unit_name} | T° Planeta: {temp_display}."
+
+            fig_data_highlight = [
+                go.Scatter3d(
+                    x=[x_t], y=[y_t], z=[z_t], mode='markers',
+                    marker=dict(size=12, color='#00BFFF', symbol='circle', line=dict(width=2, color='white')),
+                    name=planet_sel, hoverinfo='text',
+                    text=[f"🌟 ¡OBJETO BUSCADO!<br>{planet_sel}<br>Dist: {distancia_muestra:.2f} {unit_name}<br>T: {temp_display}"],
+                    showlegend=False
+                )
+            ]
+        else:
+            search_message = f"⚠️ Planeta '{planet_sel}' no encontrado en el dataset actual."
 
         # Construir figura
         # Preparar textos de hover fuera de la lista de datos para evitar sintaxis inválida
