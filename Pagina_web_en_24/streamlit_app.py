@@ -99,7 +99,7 @@ def render_hero(page_selected: str):
 
 render_hero(page)
 
-# Render simple chat widget HTML (uses CSS from style.css)
+# Render simple chat widget HTML (uses CSS from style.css) but only show it on the main menu ('Clasificador ML')
 chat_html = '''
 <div class="chat-widget" id="chatWidget">
     <div class="chat-header" onclick="toggleChat()">
@@ -126,11 +126,9 @@ function toggleChat(){
 async function sendMessage(){
     const input=document.getElementById('userInput');
     const text=input.value.trim(); if(!text) return;
-    // Add user message to local DOM
     const msgs=document.getElementById('chatMessages');
     const um=document.createElement('div'); um.className='user-message'; um.textContent=text; msgs.appendChild(um);
     input.value=''; msgs.scrollTop=msgs.scrollHeight;
-    // Call backend (Streamlit assistant via sidebar form will also keep history);
     try{
         const resp=await fetch('/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})});
         const data=await resp.json();
@@ -143,7 +141,9 @@ async function sendMessage(){
 </script>
 '''
 
-st.components.v1.html(chat_html, height=420)
+# Only inject the floating chat widget on the 'Clasificador ML' page (the "menu of options")
+if page == "Clasificador ML":
+    st.components.v1.html(chat_html, height=420)
 
 # --- Asistente virtual para usuarios noveles (barra lateral) ---
 if 'assistant_messages' not in st.session_state:
@@ -172,35 +172,36 @@ def generate_fallback_reply(user_text: str) -> str:
         return "Para habilitar predicciones ML debes tener 'exoplanet_classifier.joblib', 'scaler.joblib' y 'label_encoder.joblib' en la carpeta ML/. Si no están, el formulario seguirá permitiendo añadir exoplanetas pero sin predicción."
     return "Puedo ayudarte con: cómo usar los simuladores 2D/3D, cómo añadir exoplanetas, o cómo preparar los archivos ML. Fórmulate una pregunta concreta o escribe 'ayuda'."
 
-with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
-    for role, msg in st.session_state.assistant_messages:
-        if role == 'bot':
-            st.markdown(f"**Asistente:** {msg}")
-        else:
-            st.markdown(f"**Tú:** {msg}")
-
-    with st.form("assistant_form"):
-        user_input = st.text_input("Escribe tu pregunta para el asistente:")
-        sent = st.form_submit_button("Enviar")
-    if sent and user_input:
-        st.session_state.assistant_messages.append(("user", user_input))
-        # Intentar pedir al backend local (/chat)
-        reply = None
-        try:
-            resp = requests.post("http://127.0.0.1:5000/chat", json={"message": user_input}, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                reply = data.get('response')
+if page == "Clasificador ML":
+    with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
+        for role, msg in st.session_state.assistant_messages:
+            if role == 'bot':
+                st.markdown(f"**Asistente:** {msg}")
             else:
-                reply = None
-        except Exception:
+                st.markdown(f"**Tú:** {msg}")
+
+        with st.form("assistant_form"):
+            user_input = st.text_input("Escribe tu pregunta para el asistente:")
+            sent = st.form_submit_button("Enviar")
+        if sent and user_input:
+            st.session_state.assistant_messages.append(("user", user_input))
+            # Intentar pedir al backend local (/chat)
             reply = None
+            try:
+                resp = requests.post("http://127.0.0.1:5000/chat", json={"message": user_input}, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    reply = data.get('response')
+                else:
+                    reply = None
+            except Exception:
+                reply = None
 
-        if not reply:
-            reply = generate_fallback_reply(user_input)
+            if not reply:
+                reply = generate_fallback_reply(user_input)
 
-        st.session_state.assistant_messages.append(("bot", reply))
-        # No forzamos rerun; Streamlit mostrará los nuevos mensajes en la próxima interacción
+            st.session_state.assistant_messages.append(("bot", reply))
+            # No forzamos rerun; Streamlit mostrará los nuevos mensajes en la próxima interacción
 
 if page == "Simulador 2D":
     st.header("Simulador 2D")
@@ -456,21 +457,17 @@ elif page == "Simulador 3D":
             st.subheader("Predecir y agregar (individual)")
             with st.form("ml_3d_form_left"):
                 st.markdown("Introduce las 11 features para predecir la clase del exoplaneta:")
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    koi_model_snr_3 = st.number_input("Transit SNR", value=18.0, key='snr_3_left')
-                    koi_prad_3 = st.number_input("Planetary Radius (koi_prad)", value=0.59, key='prad_3_left')
-                    koi_sma_3 = st.number_input("Orbit SMA (koi_sma)", value=0.0739, key='sma_3_left')
-                    koi_teq_3 = st.number_input("Equilibrium Temp (koi_teq)", value=443.0, key='teq_3_left')
-                with c2:
-                    koi_period_3 = st.number_input("Orbital Period (koi_period)", value=10.3128, key='period_3_left')
-                    koi_duration_3 = st.number_input("Transit Duration (koi_duration)", value=3.2, key='duration_3_left')
-                    koi_depth_3 = st.number_input("Transit Depth (koi_depth)", value=0.45, key='depth_3_left')
-                    koi_steff_3 = st.number_input("Stellar Teff (koi_steff)", value=5600.0, key='steff_3_left')
-                with c3:
-                    koi_slogg_3 = st.number_input("Stellar logg (koi_slogg)", value=4.4, key='slogg_3_left')
-                    koi_srad_3 = st.number_input("Stellar Radius (koi_srad)", value=0.98, key='srad_3_left')
-                    koi_time0bk_3 = st.number_input("Transit Epoch (koi_time0bk)", value=2459000.123, key='time0bk_3_left')
+                koi_model_snr_3 = st.number_input("Transit SNR", value=18.0, key='snr_3_left')
+                koi_prad_3 = st.number_input("Planetary Radius (koi_prad)", value=0.59, key='prad_3_left')
+                koi_sma_3 = st.number_input("Orbit SMA (koi_sma)", value=0.0739, key='sma_3_left')
+                koi_teq_3 = st.number_input("Equilibrium Temp (koi_teq)", value=443.0, key='teq_3_left')
+                koi_period_3 = st.number_input("Orbital Period (koi_period)", value=10.3128, key='period_3_left')
+                koi_duration_3 = st.number_input("Transit Duration (koi_duration)", value=3.2, key='duration_3_left')
+                koi_depth_3 = st.number_input("Transit Depth (koi_depth)", value=0.45, key='depth_3_left')
+                koi_steff_3 = st.number_input("Stellar Teff (koi_steff)", value=5600.0, key='steff_3_left')
+                koi_slogg_3 = st.number_input("Stellar logg (koi_slogg)", value=4.4, key='slogg_3_left')
+                koi_srad_3 = st.number_input("Stellar Radius (koi_srad)", value=0.98, key='srad_3_left')
+                koi_time0bk_3 = st.number_input("Transit Epoch (koi_time0bk)", value=2459000.123, key='time0bk_3_left')
                 add_to_plot = st.checkbox("Agregar punto al plot 3D con la predicción", value=False)
                 ml_submitted = st.form_submit_button("Predecir clase (ML)")
 
