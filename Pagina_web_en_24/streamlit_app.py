@@ -457,9 +457,6 @@ elif page == "3D Simulator":
         # Move 3D controls and ML forms to the sidebar so the 3D canvas can fill the page
         with st.sidebar.expander("Controls & ML Classifier", expanded=False):
             st.subheader("Controls & ML Classifier")
-            color_mode = st.selectbox(
-                "Color by:", options=["Temperature", "ML Classification"]
-            )
 
             required_features = [
                 "koi_model_snr",
@@ -798,23 +795,18 @@ elif page == "3D Simulator":
                         f"Name: {n}<br>Planet T°: {t:.0f} K<br>Distance: {d:.2f} {unit_name}"
                     )
 
-        # Prepare data and color according to mode
-        if color_mode == "ML Classification" and "pred_class" in df3.columns:
-            color_col = "pred_class"
-            # Map categories to colors via Plotly's categorical coloring
-            marker_dict = dict(size=4, opacity=0.9, line=dict(width=0.2, color="white"))
-        else:
-            color_col = "pl_eqt"
-            marker_dict = dict(
-                size=4,
-                color=df3["pl_eqt"],
-                colorscale="Plasma",
-                cmin=temp_min_planet,
-                cmax=temp_max_planet,
-                colorbar=dict(title="Planet Temp. (K)", thickness=20),
-                opacity=0.8,
-                line=dict(width=0.2, color="white"),
-            )
+        # Prepare data and color by temperature
+        color_col = "pl_eqt"
+        marker_dict = dict(
+            size=4,
+            color=df3["pl_eqt"],
+            colorscale="Plasma",
+            cmin=temp_min_planet,
+            cmax=temp_max_planet,
+            colorbar=dict(title="Planet Temp. (K)", thickness=20),
+            opacity=0.8,
+            line=dict(width=0.2, color="white"),
+        )
 
         # Crear scatter3d para los exoplanetas; si es categórico, crear una traza por categoría para la leyenda
         # Ajustar tamaños relativos según el radio (mejor visibilidad)
@@ -856,60 +848,29 @@ elif page == "3D Simulator":
         except Exception:
             pass
 
-        if color_col == "pred_class" and "pred_class" in df3.columns:
-            categories = sorted(df3["pred_class"].dropna().unique().tolist())
-            color_list = px.colors.qualitative.Plotly
-            color_map = {
-                cat: color_list[i % len(color_list)] for i, cat in enumerate(categories)
-            }
-            for cat in categories:
-                mask = df3["pred_class"] == cat
-                if mask.sum() == 0:
-                    continue
-                traces.append(
-                    go.Scatter3d(
-                        x=df3.loc[mask, "x"],
-                        y=df3.loc[mask, "y"],
-                        z=df3.loc[mask, "z"],
-                        mode="markers",
-                        marker=dict(
-                            size=sizes[mask.index[mask].tolist()]
-                            if hasattr(sizes, "index")
-                            else sizes[mask],
-                            color=color_map.get(cat),
-                            opacity=0.95,
-                            line=dict(width=0.3, color="white"),
-                        ),
-                        name=str(cat),
-                        text=[hover_texts[i] for i in range(len(df3)) if mask.iloc[i]],
-                        hovertemplate=hovertemplate,
-                        hoverinfo="text",
-                    )
-                )
-        else:
-            # Continuous temperature coloring
-            traces.append(
-                go.Scatter3d(
-                    x=df3["x"],
-                    y=df3["y"],
-                    z=df3["z"],
-                    mode="markers",
-                    marker=dict(
-                        size=sizes,
-                        color=df3["pl_eqt"],
-                        colorscale="Plasma",
-                        cmin=temp_min_planet,
-                        cmax=temp_max_planet,
-                        colorbar=dict(title="Planet Temp. (K)", thickness=20),
-                        opacity=0.85,
-                        line=dict(width=0.2, color="white"),
-                    ),
-                    name="Exoplanets",
-                    text=hover_texts,
-                    hovertemplate=hovertemplate,
-                    hoverinfo="text",
-                )
+        # Continuous temperature coloring
+        traces.append(
+            go.Scatter3d(
+                x=df3["x"],
+                y=df3["y"],
+                z=df3["z"],
+                mode="markers",
+                marker=dict(
+                    size=sizes,
+                    color=df3["pl_eqt"],
+                    colorscale="Plasma",
+                    cmin=temp_min_planet,
+                    cmax=temp_max_planet,
+                    colorbar=dict(title="Planet Temp. (K)", thickness=20),
+                    opacity=0.85,
+                    line=dict(width=0.2, color="white"),
+                ),
+                name="Exoplanets",
+                text=hover_texts,
+                hovertemplate=hovertemplate,
+                hoverinfo="text",
             )
+        )
 
         # Solar System central point
         traces.insert(
