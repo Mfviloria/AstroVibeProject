@@ -64,7 +64,8 @@ if css:
 if 'page' not in st.session_state:
     st.session_state.page = "Simulador 2D"
 st.sidebar.header("Navegación")
-page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simulador 3D", "Clasificador ML"], key='page')
+# Añadimos la página "Asistente" al menú de opciones para acceder al asistente virtual
+page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simulador 3D", "Clasificador ML", "Asistente"], key='page')
 
 # Header quick buttons removed — la navegación ahora se gestiona únicamente desde el menú lateral
 # (mantener la variable `page` sincronizada con session_state)
@@ -141,8 +142,8 @@ async function sendMessage(){
 </script>
 '''
 
-# Only inject the floating chat widget on the 'Clasificador ML' page (the "menu of options")
-if page == "Clasificador ML":
+# Only inject the floating chat widget on the 'Clasificador ML' or 'Asistente' page
+if page in ("Clasificador ML", "Asistente"):
     st.components.v1.html(chat_html, height=420)
 
 # --- Asistente virtual para usuarios noveles (barra lateral) ---
@@ -172,7 +173,7 @@ def generate_fallback_reply(user_text: str) -> str:
         return "Para habilitar predicciones ML debes tener 'exoplanet_classifier.joblib', 'scaler.joblib' y 'label_encoder.joblib' en la carpeta ML/. Si no están, el formulario seguirá permitiendo añadir exoplanetas pero sin predicción."
     return "Puedo ayudarte con: cómo usar los simuladores 2D/3D, cómo añadir exoplanetas, o cómo preparar los archivos ML. Fórmulate una pregunta concreta o escribe 'ayuda'."
 
-if page == "Clasificador ML":
+if page in ("Clasificador ML", "Asistente"):
     with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
         for role, msg in st.session_state.assistant_messages:
             if role == 'bot':
