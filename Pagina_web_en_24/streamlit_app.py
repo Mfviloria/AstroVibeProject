@@ -46,13 +46,13 @@ if css:
         }
         .stButton>button:hover, button[data-baseweb="button"]:hover { background-color: #0077b3 !important; }
 
-        /* Ajustes del contenedor principal de Streamlit para centrar y dar espacio */
+        /* Ajustes del contenedor principal de Streamlit para usar todo el ancho */
         .app-view-container .main .block-container {
             padding-top: 20px !important;
-            padding-left: 20px !important;
-            padding-right: 20px !important;
-            max-width: 1200px !important;
-            margin: 0 auto !important;
+            padding-left: 18px !important;
+            padding-right: 18px !important;
+            max-width: 100% !important;
+            margin: 0 !important;
             background: transparent !important;
         }
         '''
@@ -85,9 +85,7 @@ def render_hero(page_selected: str):
     '''
 
     sim3d_html = '''
-    <div class="hero" style="display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;margin-bottom:20px;">
-        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='240'><rect width='100%' height='100%' fill='%23000a14'/><text x='50%' y='50%' fill='%23a4d4ff' font-family='Orbitron, sans-serif' font-size='30' text-anchor='middle'>Simulador 3D - Vista previa</text></svg>" style="max-width:100%;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.45);"/>
-    </div>
+    <!-- Simulador 3D preview removed for cleaner UX -->
     '''
 
     if page_selected == 'Simulador 2D':
@@ -103,16 +101,13 @@ render_hero(page)
 chat_html = '''
 <div class="chat-widget" id="chatWidget">
     <div class="chat-header" onclick="toggleChat()">
-        Asistente 🤖
+        Asistente
         <span id="chatToggleIcon">▼</span>
     </div>
     <div class="chat-body" id="chatBody">
         <div class="chat-messages" id="chatMessages">
         </div>
-        <div class="chat-input">
-            <input type="text" id="userInput" placeholder="Escribe una pregunta...">
-            <button onclick="sendMessage()">➤</button>
-        </div>
+        <!-- Input removed for cleaner UX; assistant interactions use sidebar form -->
     </div>
 </div>
 
@@ -178,28 +173,7 @@ with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
         else:
             st.markdown(f"**Tú:** {msg}")
 
-    with st.form("assistant_form"):
-        user_input = st.text_input("Escribe tu pregunta para el asistente:")
-        sent = st.form_submit_button("Enviar")
-    if sent and user_input:
-        st.session_state.assistant_messages.append(("user", user_input))
-        # Intentar pedir al backend local (/chat)
-        reply = None
-        try:
-            resp = requests.post("http://127.0.0.1:5000/chat", json={"message": user_input}, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                reply = data.get('response')
-            else:
-                reply = None
-        except Exception:
-            reply = None
-
-        if not reply:
-            reply = generate_fallback_reply(user_input)
-
-        st.session_state.assistant_messages.append(("bot", reply))
-        # No forzamos rerun; Streamlit mostrará los nuevos mensajes en la próxima interacción
+    # Input removed by user request; assistant shows messages only in the sidebar.
 
 if page == "Simulador 2D":
     st.header("Simulador 2D")
