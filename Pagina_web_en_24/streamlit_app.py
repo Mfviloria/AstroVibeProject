@@ -142,8 +142,8 @@ async function sendMessage(){
 </script>
 '''
 
-# Only inject the floating chat widget on the 'Clasificador ML' or 'Asistente' page
-if page in ("Clasificador ML", "Asistente"):
+# Only inject the floating chat widget on the dedicated 'Asistente' page
+if page == "Asistente":
     st.components.v1.html(chat_html, height=420)
 
 # --- Asistente virtual para usuarios noveles (barra lateral) ---
@@ -173,7 +173,7 @@ def generate_fallback_reply(user_text: str) -> str:
         return "Para habilitar predicciones ML debes tener 'exoplanet_classifier.joblib', 'scaler.joblib' y 'label_encoder.joblib' en la carpeta ML/. Si no están, el formulario seguirá permitiendo añadir exoplanetas pero sin predicción."
     return "Puedo ayudarte con: cómo usar los simuladores 2D/3D, cómo añadir exoplanetas, o cómo preparar los archivos ML. Fórmulate una pregunta concreta o escribe 'ayuda'."
 
-if page in ("Clasificador ML", "Asistente"):
+if page == "Asistente":
     with st.sidebar.expander("Asistente para principiantes 🤖", expanded=False):
         for role, msg in st.session_state.assistant_messages:
             if role == 'bot':
@@ -670,36 +670,74 @@ elif page == "Simulador 3D":
             marker_dict = dict(size=4, color=df3['pl_eqt'], colorscale='Plasma', cmin=temp_min_planet, cmax=temp_max_planet,
                                 colorbar=dict(title='Temp. Planeta (K)', thickness=20), opacity=0.8, line=dict(width=0.2, color='white'))
 
-        # Crear scatter3d para los exoplanetas; si es categórico, usar color por texto
-        scatter_kwargs = dict(x=df3['x'], y=df3['y'], z=df3['z'], mode='markers', marker=marker_dict, name='Exoplanetas', text=hover_texts, hoverinfo='text')
-        if color_col == 'pred_class':
-            # plotly acepta color como array de string para categoricals en px, but with go we can pass marker colors mapped
-            # Build a mapping
-            categories = sorted(df3['pred_class'].dropna().unique().tolist())
-            color_map = {cat: px.colors.qualitative.Plotly[i % len(px.colors.qualitative.Plotly)] for i, cat in enumerate(categories)}
-            colors_mapped = [color_map.get(v, '#888888') for v in df3['pred_class']]
-            scatter = go.Scatter3d(x=df3['x'], y=df3['y'], z=df3['z'], mode='markers', marker=dict(size=4, color=colors_mapped, opacity=0.9, line=dict(width=0.2, color='white')), name='Exoplanetas', text=hover_texts, hoverinfo='text')
+        # Crear scatter3d para los exoplanetas; si es categórico, crear una traza por categoría para la leyenda
+        # Ajustar tamaños relativos según el radio (mejor visibilidad)
+        sizes = (df3['pl_rade'].astype(float).fillna(0.5) - df3['pl_rade'].astype(float).fillna(0.5).min())
+        if sizes.max() > 0:
+            sizes = 6 + 18 * (sizes / sizes.max())
         else:
-            scatter = go.Scatter3d(**scatter_kwargs)
+            sizes = np.full(len(df3), 6)
 
-        base_data = [
-            go.Scatter3d(x=[0], y=[0], z=[0], mode='markers', marker=dict(size=8, color='yellow', symbol='diamond'), name='Sistema Solar', hoverinfo='text', text=["Sistema Solar (Tierra)"]),
-            scatter
-        ]
+        hovertemplate = "%{text}<extra></extra>"
 
-        fig = go.Figure(data=base_data + fig_data_highlight)
+        traces = []
+        # Add a soft starfield in the background for depth (few hundred faint points)
+        try:
+            rng = np.random.default_rng(42)
+            n_stars = 300
+            star_x = rng.uniform(RANGO_FIJO_DINAMICO[0]*0.9, RANGO_FIJO_DINAMICO[1]*0.9, n_stars)
+            star_y = rng.uniform(RANGO_FIJO_DINAMICO[0]*0.9, RANGO_FIJO_DINAMICO[1]*0.9, n_stars)
+            star_z = rng.uniform(RANGO_FIJO_DINAMICO[0]*0.9, RANGO_FIJO_DINAMICO[1]*0.9, n_stars)
+            star_trace = go.Scatter3d(x=star_x, y=star_y, z=star_z, mode='markers',
+                                      marker=dict(size=1.5, color='white', opacity=0.15),
+                                      hoverinfo='none', showlegend=False)
+            traces.append(star_trace)
+        except Exception:
+            pass
+
+        if color_col == 'pred_class' and 'pred_class' in df3.columns:
+            categories = sorted(df3['pred_class'].dropna().unique().tolist())
+            color_list = px.colors.qualitative.Plotly
+            color_map = {cat: color_list[i % len(color_list)] for i, cat in enumerate(categories)}
+            for cat in categories:
+                mask = df3['pred_class'] == cat
+                if mask.sum() == 0:
+                    continue
+                traces.append(go.Scatter3d(
+                    x=df3.loc[mask, 'x'], y=df3.loc[mask, 'y'], z=df3.loc[mask, 'z'], mode='markers',
+                    marker=dict(size=sizes[mask.index[mask].tolist()] if hasattr(sizes, 'index') else sizes[mask], color=color_map.get(cat), opacity=0.95, line=dict(width=0.3, color='white')),
+                    name=str(cat), text=[hover_texts[i] for i in range(len(df3)) if mask.iloc[i]], hovertemplate=hovertemplate, hoverinfo='text'
+                ))
+        else:
+            # Continuous temperature coloring
+            traces.append(go.Scatter3d(x=df3['x'], y=df3['y'], z=df3['z'], mode='markers',
+                                       marker=dict(size=sizes, color=df3['pl_eqt'], colorscale='Plasma', cmin=temp_min_planet, cmax=temp_max_planet,
+                                                   colorbar=dict(title='Temp. Planeta (K)', thickness=20), opacity=0.85, line=dict(width=0.2, color='white')),
+                                       name='Exoplanetas', text=hover_texts, hovertemplate=hovertemplate, hoverinfo='text'))
+
+        # Sistema Solar punto central
+        traces.insert(len(traces), go.Scatter3d(x=[0], y=[0], z=[0], mode='markers', marker=dict(size=10, color='gold', symbol='diamond', line=dict(width=1, color='white')), name='Sistema Solar', hoverinfo='text', text=["Sistema Solar (Tierra)"]))
+
+        # Añadir highlight si aplica
+        traces = traces + fig_data_highlight
+
+        fig = go.Figure(data=traces)
         fig.update_layout(
             title=f"Exoplanetas en 3D (en {unit_name})",
             scene=dict(
-                xaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000000", gridcolor="#333333", zerolinecolor="#666666", title=f'X ({unit_name})'),
-                yaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000000", gridcolor="#333333", zerolinecolor="#666666", title=f'Y ({unit_name})'),
-                zaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000000", gridcolor="#333333", zerolinecolor="#666666", title=f'Z ({unit_name})'),
+                xaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000010", gridcolor="#222222", zerolinecolor="#333333", title=f'X ({unit_name})'),
+                yaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000010", gridcolor="#222222", zerolinecolor="#333333", title=f'Y ({unit_name})'),
+                zaxis=dict(range=RANGO_FIJO_DINAMICO, backgroundcolor="#000010", gridcolor="#222222", zerolinecolor="#333333", title=f'Z ({unit_name})'),
                 aspectmode='cube',
                 camera=final_camera,
                 uirevision=planet_sel if planet_sel else 'PersistentView'
             ),
-            height=820, paper_bgcolor="#111111", plot_bgcolor="#111111", font=dict(color='white'), margin=dict(l=0, r=0, t=40, b=0)
+            height=820, paper_bgcolor="#070712", plot_bgcolor="#070712", font=dict(color='white'), margin=dict(l=0, r=0, t=50, b=0),
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
         )
+
+        # Mejoras al hoverlabel
+        fig.update_traces(hoverlabel=dict(bgcolor="#111111", font_color='white'))
 
         st.plotly_chart(fig, use_container_width=True)
         if search_message:
