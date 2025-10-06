@@ -411,7 +411,7 @@ if page == "2D Simulator":
 elif page == "3D Simulator":
     st.header("3D Simulator — NASA Project")
     st.write(
-        "Interactive 3D visualization of exoplanets. Based on the NASA project designed in the 'proyecto nasa' folder."
+        "Here you can display your 3D simulator. You can adapt this space to show visualizations, load data, etc."
     )
 
     # Constantes de conversión
