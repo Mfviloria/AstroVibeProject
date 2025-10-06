@@ -79,19 +79,8 @@ if 'page' not in st.session_state:
 st.sidebar.header("Navegación")
 page = st.sidebar.selectbox("Selecciona una sección:", ["Simulador 2D", "Simulador 3D", "Clasificador ML"], key='page')
 
-# Header quick buttons (visually similar to index.html)
-col1, col2, col3 = st.columns([1,1,6])
-with col1:
-    if st.button("Abrir Modelo 2D"):
-        st.session_state.page = "Simulador 2D"
-with col2:
-    if st.button("Abrir Modelo 3D"):
-        st.session_state.page = "Simulador 3D"
-with col3:
-    # placeholder for spacing/title already shown in the big container
-    st.write("")
-
-# Asegurar que 'page' refleja botones del header
+# Header quick buttons removed — la navegación ahora se gestiona únicamente desde el menú lateral
+# (mantener la variable `page` sincronizada con session_state)
 page = st.session_state.page
 
 # Render simple chat widget HTML (uses CSS from style.css)
