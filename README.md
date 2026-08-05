@@ -16,11 +16,6 @@ An interactive Streamlit dashboard for exploring confirmed exoplanets using data
 - 📊 Compare planets using customizable parameters
 - 📥 Export filtered datasets for further analysis
 
-## 🖼️ Preview
-
-<!-- Add a screenshot or GIF of the dashboard here -->
-<!-- ![App preview](assets/preview.png) -->
-
 ## 🛠️ Tech Stack
 
 - **Python**
@@ -87,10 +82,16 @@ The goal of this project is to make exoplanet exploration more accessible throug
 - Advanced statistical analysis of discovery methods
 - Personalized planet recommendation and comparison tools
 
-## 👩‍💻 Author
+## 👩‍💻 Authors
 
 **Laura**
-Data Science Student | Data Visualization | Space & Analytics Enthusiast
+Data Science Student | Data Visualization 
+
+**Mafe Viloria**
+Software and Systems Engineer | Developer
+
+**Daniel Bula**
+High School Student, Colegio José Celestino Mutis | Space & Analytics Enthusiast
 
 ## 📄 License
 
